@@ -1,319 +1,388 @@
-/* NoteFall Game Styles */
+/* NoteFall Game Styles - Guitar Hero Inspired */
 .notefall-container {
-  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-  border-radius: 12px;
-  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%);
   color: white;
+  overflow: hidden;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  max-width: 100%;
-  margin: 0 auto;
 }
 
 .notefall-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 10px;
+  padding: 1rem 2rem;
+  background: rgba(0, 0, 0, 0.4);
+  border-bottom: 2px solid #333;
 }
 
 .notefall-header h2 {
   margin: 0;
+  font-size: 2.2rem;
+  background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+}
+
+.game-controls {
+  display: flex;
+  gap: 1rem;
+}
+
+.button {
+  border: none;
+  border-radius: 12px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.button.primary {
+  background: linear-gradient(45deg, #646cff, #4facfe);
+  color: white;
+  box-shadow: 0 4px 15px rgba(100, 108, 255, 0.4);
+  border: 1px solid rgba(100, 108, 255, 0.3);
+}
+
+.button.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(100, 108, 255, 0.6);
+}
+
+.button.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.button.secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Game Stats */
+.game-stats {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.game-stats .stat {
+  text-align: center;
+  min-width: 100px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.game-stats .stat-label {
+  display: block;
+  font-size: 0.9rem;
+  color: #b4b4c4;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.game-stats .stat-value {
+  display: block;
   font-size: 1.8rem;
-  background: linear-gradient(45deg, #ffd700, #ffed4e);
+  font-weight: bold;
+  background: linear-gradient(45deg, #646cff, #4facfe);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.game-controls {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-}
-
-.button.primary {
-  background: linear-gradient(45deg, #4CAF50, #45a049);
-  color: white;
-}
-
-.button.secondary {
-  background: linear-gradient(45deg, #ff6b6b, #ee5656);
-  color: white;
-}
-
-.button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.game-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 15px;
-  margin-bottom: 15px;
-}
-
-.stat {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 12px;
-  border-radius: 8px;
-  text-align: center;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.stat-label {
-  display: block;
-  font-size: 0.9rem;
-  opacity: 0.8;
-  margin-bottom: 4px;
-}
-
-.stat-value {
-  display: block;
-  font-size: 1.4rem;
-  font-weight: bold;
-}
-
 .combo-value {
-  color: #ffd700;
-  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  background: linear-gradient(45deg, #ff6b6b, #ff8e8e) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
 }
 
 .detailed-stats {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .stat-item {
-  padding: 8px 16px;
+  padding: 0.5rem 1rem;
   border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 600;
 }
 
 .stat-item.perfect {
-  background: rgba(76, 175, 80, 0.3);
-  color: #4CAF50;
+  background: rgba(255, 215, 0, 0.2);
+  border-color: #ffd700;
+  color: #ffd700;
 }
 
 .stat-item.good {
-  background: rgba(255, 193, 7, 0.3);
-  color: #FFC107;
+  background: rgba(50, 205, 50, 0.2);
+  border-color: #32cd32;
+  color: #32cd32;
 }
 
 .stat-item.miss {
-  background: rgba(244, 67, 54, 0.3);
-  color: #f44336;
+  background: rgba(255, 69, 0, 0.2);
+  border-color: #ff4500;
+  color: #ff4500;
 }
 
+/* Game Area */
 .game-area {
+  flex: 1;
   position: relative;
-  height: 600px;
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  margin: 0 1rem 1rem;
   border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: linear-gradient(to bottom, 
+    rgba(0, 0, 0, 0.1) 0%,
+    rgba(0, 0, 0, 0.3) 85%,
+    rgba(0, 0, 0, 0.8) 100%
+  );
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-/* Piano Keyboard at Top */
-.piano-keyboard {
+/* Lane Headers - Guitar Hero Style */
+.lane-headers {
+  display: flex;
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 80px;
-  display: flex;
-  background: #222;
-  border-bottom: 3px solid #444;
+  height: 100px;
   z-index: 10;
+  background: linear-gradient(180deg, 
+    rgba(0, 0, 0, 0.8) 0%, 
+    rgba(0, 0, 0, 0.6) 100%
+  );
+  border-bottom: 3px solid rgba(255, 255, 255, 0.2);
 }
 
-.piano-key {
-  position: relative;
-  border: 1px solid #555;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 5px;
-  font-size: 9px;
-  font-weight: bold;
-  transition: all 0.1s ease;
-  cursor: pointer;
-  background: var(--key-color);
-  opacity: 0.8;
-}
-
-.piano-key.white-key {
-  color: #000;
+.lane-header {
   flex: 1;
-  height: 100%;
-  z-index: 1;
-  border-color: #333;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.piano-key.black-key {
-  color: #fff;
-  width: 60%;
-  height: 60%;
-  position: absolute;
-  z-index: 2;
-  border-radius: 0 0 4px 4px;
-  border-color: #000;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  filter: brightness(0.6);
-}
-
-/* Position black keys correctly relative to their white key neighbors */
-.piano-key.black-key:nth-child(2) { left: calc(100% / 24 * 0.7); } /* C# after C */
-.piano-key.black-key:nth-child(4) { left: calc(100% / 24 * 2.7); } /* D# after D */
-.piano-key.black-key:nth-child(7) { left: calc(100% / 24 * 5.7); } /* F# after F */
-.piano-key.black-key:nth-child(9) { left: calc(100% / 24 * 7.7); } /* G# after G */
-.piano-key.black-key:nth-child(11) { left: calc(100% / 24 * 9.7); } /* A# after A */
-
-.piano-key.active {
-  opacity: 1 !important;
-  filter: brightness(1.2) !important;
-  transform: scale(0.95);
-  box-shadow: 0 0 15px var(--key-color), inset 0 2px 4px rgba(0, 0, 0, 0.2) !important;
-}
-
-.key-label {
-  font-size: 8px;
+  padding: 1rem 0.5rem;
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  transition: all 0.15s ease;
+  background: linear-gradient(180deg, 
+    rgba(255, 255, 255, 0.02) 0%, 
+    rgba(255, 255, 255, 0.05) 100%
+  );
+}
+
+.lane-header:last-child {
+  border-right: none;
+}
+
+.lane-header.active {
+  background: var(--lane-color);
+  transform: scale(1.02);
+  border-color: var(--lane-color);
+  box-shadow: 0 0 20px var(--lane-color);
+}
+
+.lane-note {
   font-weight: bold;
+  font-size: 1rem;
+  color: var(--lane-color);
+  text-shadow: 
+    0 0 8px var(--lane-color),
+    0 1px 2px rgba(0, 0, 0, 0.8);
+  margin-bottom: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.lane-header.active .lane-note {
+  color: #ffffff;
+  text-shadow: 
+    0 0 12px rgba(255, 255, 255, 1),
+    0 0 20px var(--lane-color),
+    0 1px 2px rgba(0, 0, 0, 0.8);
+  transform: scale(1.1);
+}
+
+.lane-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 25px;
+  background: linear-gradient(180deg, 
+    var(--lane-color) 0%, 
+    rgba(255, 255, 255, 0.8) 100%
+  );
+  border-radius: 3px;
+  box-shadow: 0 0 10px var(--lane-color);
+  opacity: 0.7;
+  transition: all 0.15s ease;
+}
+
+.lane-header.active .lane-indicator {
+  height: 35px;
+  width: 8px;
+  opacity: 1;
+  box-shadow: 0 0 15px var(--lane-color);
 }
 
 /* Notes Container */
 .notes-container {
   position: absolute;
-  top: 80px;
+  top: 100px;
   left: 0;
   right: 0;
-  bottom: 100px;
+  bottom: 80px;
+  pointer-events: none;
   overflow: hidden;
+  z-index: 3;
 }
 
-/* Falling Notes */
+/* Falling Notes - Simplified for Performance */
 .falling-note {
   position: absolute;
-  width: calc(100% / 24 - 2px);
-  height: 35px;
-  border-radius: 8px;
-  left: calc(var(--lane-index) * (100% / 24) + 1px);
-  /* Note: top is now set via inline style in pixels */
+  width: calc(100% / 24 - 4px);
+  height: 45px;
+  left: calc(var(--lane-index) * (100% / 24) + 2px);
   transition: none;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  z-index: 3;
-  background: var(--note-color);
-  opacity: 0.9;
-}
-
-.falling-note.black-note {
-  width: calc(60% * (100% / 24) - 2px);
-  left: calc(var(--lane-index) * (100% / 24) + (100% / 24) * 0.2 + 1px);
-  filter: brightness(0.8);
-}
-
-.falling-note.hit {
-  background: linear-gradient(180deg, #4CAF50 0%, #45a049 100%) !important;
-  animation: hit-flash 0.4s ease-out;
-  transform: scale(1.15);
-  box-shadow: 0 0 20px #4CAF50, 0 3px 10px rgba(0, 0, 0, 0.4);
-}
-
-.falling-note.missed {
-  background: linear-gradient(180deg, #f44336 0%, #d32f2f 100%) !important;
-  opacity: 0.4;
-  animation: miss-fade 0.6s ease-out;
-}
-
-@keyframes hit-flash {
-  0% { 
-    box-shadow: 0 0 30px #4CAF50, 0 3px 10px rgba(0, 0, 0, 0.4);
-    transform: scale(1.15);
-  }
-  100% { 
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
-    transform: scale(1);
-  }
-}
-
-@keyframes miss-fade {
-  0% { opacity: 0.9; transform: scale(1); }
-  50% { transform: scale(0.9); }
-  100% { opacity: 0.2; transform: scale(0.8); }
+  z-index: 4;
+  border-radius: 12px;
 }
 
 .note-inner {
   width: 100%;
   height: 100%;
-  border-radius: 6px;
-  background: inherit;
+  background: linear-gradient(135deg, 
+    var(--lane-color) 0%, 
+    rgba(255, 255, 255, 0.3) 50%, 
+    var(--lane-color) 100%
+  );
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  box-shadow: 
+    0 0 10px var(--lane-color),
+    0 4px 8px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
 }
 
 .note-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: bold;
-  color: #fff;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  color: #ffffff;
+  text-shadow: 
+    0 0 3px rgba(0, 0, 0, 1),
+    0 1px 2px rgba(0, 0, 0, 0.8);
   text-align: center;
   line-height: 1;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 2px 4px;
-  border-radius: 3px;
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-/* Hit Zone - positioned via inline style in pixels */
+.falling-note.hit {
+  animation: note-hit 0.4s ease-out forwards;
+}
+
+.falling-note.missed {
+  animation: note-miss 0.6s ease-out forwards;
+}
+
+@keyframes note-hit {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.falling-note.hit .note-inner {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+  box-shadow: 
+    0 0 20px #4CAF50,
+    0 4px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+@keyframes note-miss {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 0.2;
+    transform: scale(0.6) translateY(20px);
+  }
+}
+
+.falling-note.missed .note-inner {
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%) !important;
+  box-shadow: 
+    0 0 15px #f44336,
+    0 4px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Hit Zone - Translucent and Visible */
 .hit-zone {
   position: absolute;
   left: 0;
   right: 0;
-  height: 50px;
+  height: 60px;
   display: flex;
-  background: linear-gradient(180deg, 
-    rgba(255, 215, 0, 0.15) 0%, 
-    rgba(255, 215, 0, 0.3) 50%, 
-    rgba(255, 215, 0, 0.15) 100%);
-  border: 3px solid rgba(255, 215, 0, 0.8);
-  border-radius: 8px;
-  z-index: 5;
-  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+  z-index: 15;
+  border-top: 3px solid rgba(255, 255, 255, 0.9);
+  border-bottom: 3px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0.2) 100%
+  );
+  box-shadow: 
+    0 0 25px rgba(255, 255, 255, 0.5),
+    inset 0 0 20px rgba(255, 255, 255, 0.1);
 }
 
 .hit-zone-lane {
   flex: 1;
-  border-right: 1px solid rgba(255, 215, 0, 0.4);
   position: relative;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -323,160 +392,157 @@
   border-right: none;
 }
 
-.hit-zone-lane.black-key-zone {
-  width: 60%;
-  position: absolute;
-  left: calc(var(--lane-index) * (100% / 24) + (100% / 24) * 0.2);
-  background: rgba(150, 150, 150, 0.2);
-  border: 2px solid rgba(200, 200, 200, 0.6);
-  border-radius: 4px;
-  z-index: 6;
-}
-
 .hit-zone-indicator {
-  width: 80%;
-  height: 6px;
-  background: linear-gradient(90deg, 
-    rgba(255, 215, 0, 0.6) 0%, 
-    rgba(255, 215, 0, 1) 50%, 
-    rgba(255, 215, 0, 0.6) 100%);
-  border-radius: 3px;
-  box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
-  animation: hit-zone-pulse 2s ease-in-out infinite;
+  width: 60%;
+  height: 8px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.9) 50%,
+    rgba(255, 255, 255, 0.4) 100%
+  );
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
-@keyframes hit-zone-pulse {
-  0%, 100% { opacity: 0.7; transform: scaleY(1); }
-  50% { opacity: 1; transform: scaleY(1.2); }
-}
-
-/* Hit Feedback */
+/* Hit Feedback - Simplified */
 .hit-feedback {
   position: absolute;
-  bottom: 160px;
   left: calc(var(--lane-index) * (100% / 24) + (100% / 24) * 0.5);
+  bottom: 180px;
   transform: translateX(-50%);
-  font-size: 28px;
+  font-size: 1.5rem;
   font-weight: bold;
-  pointer-events: none;
-  animation: feedback-popup 1.2s ease-out forwards;
   z-index: 15;
+  pointer-events: none;
+  animation: feedback-animation 1.2s ease-out forwards;
 }
 
 .hit-feedback.perfect {
-  color: #4CAF50;
-  text-shadow: 0 0 15px rgba(76, 175, 80, 1);
+  color: #ffd700;
+  text-shadow: 0 0 10px #ffd700;
 }
 
 .hit-feedback.good {
-  color: #FFC107;
-  text-shadow: 0 0 15px rgba(255, 193, 7, 1);
+  color: #32cd32;
+  text-shadow: 0 0 10px #32cd32;
 }
 
 .hit-feedback.miss {
-  color: #f44336;
-  text-shadow: 0 0 15px rgba(244, 67, 54, 1);
+  color: #ff4500;
+  text-shadow: 0 0 10px #ff4500;
 }
 
-@keyframes feedback-popup {
+@keyframes feedback-animation {
   0% {
     opacity: 1;
     transform: translateX(-50%) translateY(0) scale(1);
   }
   25% {
-    transform: translateX(-50%) translateY(-15px) scale(1.3);
+    transform: translateX(-50%) translateY(-30px) scale(1.3);
   }
   100% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-50px) scale(0.7);
+    transform: translateX(-50%) translateY(-80px) scale(0.7);
   }
 }
 
+/* Game Instructions */
 .game-instructions {
+  padding: 1rem 2rem;
+  background: rgba(0, 0, 0, 0.4);
   text-align: center;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 15px;
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 0.9rem;
+  color: #ccc;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .game-instructions p {
-  margin: 5px 0;
-  opacity: 0.9;
+  margin: 0.25rem 0;
 }
 
 .game-instructions p:first-child {
   font-weight: bold;
-  color: #ffd700;
+  color: #4facfe;
 }
 
-/* Mobile Responsive */
+/* Responsive Design */
 @media (max-width: 768px) {
   .notefall-container {
-    padding: 15px;
+    margin: 0;
   }
   
   .notefall-header {
+    padding: 0.5rem 1rem;
     flex-direction: column;
-    align-items: stretch;
+    gap: 1rem;
   }
   
   .notefall-header h2 {
-    text-align: center;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
   }
   
-  .game-controls {
+  .game-stats {
+    gap: 1rem;
+    padding: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .detailed-stats {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem;
     justify-content: center;
   }
   
   .game-area {
-    height: 500px;
+    margin: 0 0.5rem 0.5rem;
   }
   
-  .piano-keyboard {
-    height: 60px;
+  .lane-header {
+    padding: 0.5rem 0.25rem;
   }
   
-  .key-label {
-    font-size: 6px;
+  .lane-note {
+    font-size: 0.8rem;
   }
   
   .falling-note {
-    height: 28px;
+    height: 35px;
+  }
+  
+  .note-label {
+    font-size: 9px;
+    padding: 2px 4px;
+  }
+  
+  .hit-feedback {
+    font-size: 1.2rem;
+    bottom: 140px;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-stats {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .detailed-stats {
+    justify-content: center;
+  }
+  
+  .lane-note {
+    font-size: 0.7rem;
+  }
+  
+  .falling-note {
+    height: 30px;
   }
   
   .note-label {
     font-size: 8px;
-    padding: 1px 2px;
-  }
-  
-  .hit-zone {
-    height: 40px;
-  }
-  
-  .notes-container {
-    top: 60px;
-    bottom: 80px;
-  }
-  
-  .detailed-stats {
-    gap: 10px;
-  }
-  
-  .stat-item {
-    padding: 6px 12px;
-    font-size: 0.8rem;
-  }
-  
-  .game-stats {
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 10px;
-  }
-  
-  .hit-feedback {
-    font-size: 20px;
-    bottom: 120px;
+    padding: 1px 3px;
   }
 } 

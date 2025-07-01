@@ -28,10 +28,10 @@ interface NoteFallProps {
   activeMidiNotes: Map<number, any>;
 }
 
-// Color scheme for notes A-G
+// Color scheme for notes A-G with neon colors
 const NOTE_COLORS = {
   'C': '#ff4444', // Red
-  'C#': '#ff6b44', // Red-Orange
+  'C#': '#ff6644', // Red-Orange
   'D': '#ff8844', // Orange
   'D#': '#ffaa44', // Orange-Yellow
   'E': '#ffcc44', // Yellow
@@ -44,7 +44,7 @@ const NOTE_COLORS = {
   'B': '#4488ff', // Blue
 };
 
-// Define all notes from C4 to C6 (24 notes)
+// Define all notes from C4 to C6 (24 notes) - organized as lanes for Guitar Hero style
 const GAME_LANES = (() => {
   const notes = [];
   const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -73,13 +73,37 @@ const GAME_LANES = (() => {
 })();
 
 const FALL_DURATION = 4000; // 4 seconds for note to fall
-const PIANO_HEIGHT = 80; // Height of piano keyboard in pixels
-const HIT_ZONE_HEIGHT = 50; // Height of hit zone in pixels
-const GAME_AREA_HEIGHT = 600; // Total game area height
-const NOTES_CONTAINER_HEIGHT = GAME_AREA_HEIGHT - PIANO_HEIGHT - 100; // Available height for falling notes
-const HIT_ZONE_POSITION_PX = NOTES_CONTAINER_HEIGHT - HIT_ZONE_HEIGHT; // Pixel position within notes container
 const PERFECT_WINDOW = 100; // Perfect timing window in ms
 const GOOD_WINDOW = 200; // Good timing window in ms
+
+// Dynamic calculations based on actual container size
+const getDynamicDimensions = (gameAreaRef: React.RefObject<HTMLDivElement | null>) => {
+  if (!gameAreaRef.current) {
+    // Fallback values
+    return {
+      GAME_AREA_HEIGHT: 600,
+      LANE_HEADER_HEIGHT: 100,
+      HIT_ZONE_HEIGHT: 60,
+      NOTES_CONTAINER_HEIGHT: 440,
+      HIT_ZONE_POSITION_PX: 380
+    };
+  }
+  
+  const gameAreaRect = gameAreaRef.current.getBoundingClientRect();
+  const GAME_AREA_HEIGHT = gameAreaRect.height;
+  const LANE_HEADER_HEIGHT = Math.min(100, GAME_AREA_HEIGHT * 0.15); // 15% of game area or 100px max
+  const HIT_ZONE_HEIGHT = Math.min(60, GAME_AREA_HEIGHT * 0.1); // 10% of game area or 60px max
+  const NOTES_CONTAINER_HEIGHT = GAME_AREA_HEIGHT - LANE_HEADER_HEIGHT - 80;
+  const HIT_ZONE_POSITION_PX = NOTES_CONTAINER_HEIGHT - HIT_ZONE_HEIGHT;
+  
+  return {
+    GAME_AREA_HEIGHT,
+    LANE_HEADER_HEIGHT,
+    HIT_ZONE_HEIGHT,
+    NOTES_CONTAINER_HEIGHT,
+    HIT_ZONE_POSITION_PX
+  };
+};
 
 export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallProps) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -111,6 +135,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
   const calculateNotePosition = useCallback((startTime: number, currentTime: number): number => {
     const elapsed = currentTime - startTime;
     const progress = Math.min(1, elapsed / FALL_DURATION);
+    const { NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
     return progress * NOTES_CONTAINER_HEIGHT;
   }, []);
 
@@ -143,7 +168,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
     // Remove feedback after animation
     setTimeout(() => {
       setHitFeedback(prev => prev.filter(f => f.id !== feedback.id));
-    }, 1000);
+    }, 1200);
   }, []);
 
   // Track key presses (note-on events)
@@ -200,6 +225,9 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       hitTargets.forEach(note => {
         // Calculate where the note was (in pixels) when the key was pressed
         const notePositionAtPress = calculateNotePosition(note.startTime, keyPress.timestamp);
+        
+        // Get dynamic dimensions for current game area size
+        const { HIT_ZONE_POSITION_PX, NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
         
         // Distance from hit zone center (in pixels)
         const distanceFromHitZone = Math.abs(notePositionAtPress - HIT_ZONE_POSITION_PX);
@@ -272,6 +300,8 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       }
 
       // Update falling notes and check for misses
+      const { HIT_ZONE_POSITION_PX, HIT_ZONE_HEIGHT, NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
+      
       setFallingNotes(prev => 
         prev.map(note => {
           const notePosition = calculateNotePosition(note.startTime, currentTime);
@@ -292,7 +322,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
           
           return note;
         }).filter(note => {
-          // Remove notes that are off-screen
+          // Remove notes that are off-screen - this fixes the cleanup issue!
           const notePosition = calculateNotePosition(note.startTime, currentTime);
           return notePosition < NOTES_CONTAINER_HEIGHT + 50; // Keep for a bit after they pass
         })
@@ -344,7 +374,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
   return (
     <div className="notefall-container">
       <div className="notefall-header">
-        <h2>🎹 Full Keyboard Note Fall</h2>
+        <h2>🎸 Cadence Note Fall</h2>
         <div className="game-controls">
           {!isPlaying ? (
             <button onClick={startGame} className="button primary">
@@ -384,19 +414,16 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       </div>
 
       <div className="game-area" ref={gameAreaRef}>
-        {/* Piano Keyboard at Top */}
-        <div className="piano-keyboard">
+        {/* Lane Headers - Guitar Hero Style */}
+        <div className="lane-headers">
           {GAME_LANES.map((lane, index) => (
             <div 
               key={index}
-              className={`piano-key ${lane.isBlackKey ? 'black-key' : 'white-key'} ${activeMidiNotes.has(lane.note) ? 'active' : ''}`}
-              style={{ 
-                '--lane-index': index,
-                '--key-color': lane.color,
-                zIndex: lane.isBlackKey ? 2 : 1
-              } as React.CSSProperties}
+              className={`lane-header ${activeMidiNotes.has(lane.note) ? 'active' : ''}`}
+              style={{ '--lane-color': lane.color } as React.CSSProperties}
             >
-              <div className="key-label">{lane.name}</div>
+              <div className="lane-note">{lane.name}</div>
+              <div className="lane-indicator"></div>
             </div>
           ))}
         </div>
@@ -411,10 +438,10 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
             return (
               <div
                 key={note.id}
-                className={`falling-note ${lane.isBlackKey ? 'black-note' : 'white-note'} ${note.isHit ? 'hit' : ''} ${note.isMissed ? 'missed' : ''}`}
+                className={`falling-note ${note.isHit ? 'hit' : ''} ${note.isMissed ? 'missed' : ''}`}
                 style={{
                   '--lane-index': note.lane,
-                  '--note-color': lane.color,
+                  '--lane-color': lane.color,
                   top: `${notePositionPx}px`,
                 } as React.CSSProperties}
               >
@@ -427,12 +454,14 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
         </div>
 
         {/* Hit Zone */}
-        <div className="hit-zone" style={{ top: `${PIANO_HEIGHT + HIT_ZONE_POSITION_PX}px` }}>
-          {GAME_LANES.map((lane, index) => (
+        <div className="hit-zone" style={{ top: `${(() => {
+          const { LANE_HEADER_HEIGHT, HIT_ZONE_POSITION_PX } = getDynamicDimensions(gameAreaRef);
+          return LANE_HEADER_HEIGHT + HIT_ZONE_POSITION_PX;
+        })()}px` }}>
+          {GAME_LANES.map((_, index) => (
             <div 
               key={index} 
-              className={`hit-zone-lane ${lane.isBlackKey ? 'black-key-zone' : 'white-key-zone'}`}
-              style={{ '--lane-index': index } as React.CSSProperties}
+              className="hit-zone-lane"
             >
               <div className="hit-zone-indicator"></div>
             </div>
@@ -448,17 +477,17 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
               '--lane-index': feedback.position,
             } as React.CSSProperties}
           >
-            {feedback.type === 'perfect' && '★'}
-            {feedback.type === 'good' && '✓'}
-            {feedback.type === 'miss' && '✗'}
+            {feedback.type === 'perfect' && '★ PERFECT!'}
+            {feedback.type === 'good' && '✓ GOOD!'}
+            {feedback.type === 'miss' && '✗ MISS!'}
           </div>
         ))}
       </div>
 
       <div className="game-instructions">
-        <p>🎹 Press keys exactly when the colored notes reach the yellow bar!</p>
-        <p>Range: C4 ({60}) to C6 ({84}) - {GAME_LANES.length} keys total</p>
-        <p>Timing matters - press at the RIGHT moment, not just hold the key!</p>
+        <p>🎹 Play the highlighted keys as the glowing notes reach the hit zone!</p>
+        <p>Full keyboard: C4 ({60}) to C6 ({84}) - {GAME_LANES.length} keys total</p>
+        <p>Timing is everything - press at the RIGHT moment for maximum points!</p>
       </div>
     </div>
   );
