@@ -267,11 +267,54 @@
 .falling-note {
   position: absolute;
   width: calc(100% / 24 - 4px);
-  height: 45px;
+  min-height: 45px;
   left: calc(var(--lane-index) * (100% / 24) + 2px);
   transition: none;
   z-index: 4;
   border-radius: 12px;
+}
+
+/* Tap Notes - Standard circular notes */
+.falling-note.tap {
+  height: 45px;
+  border-radius: 12px;
+}
+
+/* Hold Notes - Extended rectangular notes */
+.falling-note.hold {
+  height: var(--note-height, 45px);
+  border-radius: 12px 12px 4px 4px;
+  background: linear-gradient(180deg, 
+    var(--lane-color) 0%, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    var(--lane-color) 100%
+  );
+}
+
+/* Actively held note glow effect */
+.falling-note.actively-held {
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8), 
+              0 0 25px rgba(255, 255, 255, 0.6),
+              0 0 35px var(--lane-color),
+              inset 0 0 10px rgba(255, 255, 255, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  animation: hold-glow 0.5s ease-in-out infinite alternate;
+  transform: scale(1.05);
+}
+
+@keyframes hold-glow {
+  from {
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.8), 
+                0 0 25px rgba(255, 255, 255, 0.6),
+                0 0 35px var(--lane-color),
+                inset 0 0 10px rgba(255, 255, 255, 0.3);
+  }
+  to {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 1), 
+                0 0 35px rgba(255, 255, 255, 0.8),
+                0 0 50px var(--lane-color),
+                inset 0 0 15px rgba(255, 255, 255, 0.5);
+  }
 }
 
 .note-inner {
@@ -307,6 +350,39 @@
   padding: 3px 6px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.3);
+  z-index: 2;
+  position: relative;
+}
+
+.note-duration {
+  font-size: 9px;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+/* Hold Progress Bar */
+.hold-progress-bar {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  bottom: 2px;
+  width: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.hold-progress-fill {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: linear-gradient(180deg, 
+    #4CAF50 0%, 
+    #81C784 100%
+  );
+  border-radius: 2px;
+  transition: height 0.1s ease;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
 }
 
 .falling-note.hit {

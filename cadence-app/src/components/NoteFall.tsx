@@ -8,6 +8,10 @@ interface FallingNote {
   lane: number;
   isHit: boolean;
   isMissed: boolean;
+  type: 'tap' | 'hold';
+  duration: number; // Duration in milliseconds for hold notes, 0 for tap notes
+  holdProgress: number; // For hold notes: 0-1 representing completion percentage
+  isActivelyHeld: boolean; // Visual feedback for correctly held notes
 }
 
 interface HitFeedback {
@@ -23,9 +27,17 @@ interface MidiPressEvent {
   lane: number;
 }
 
+interface ActiveHoldNote {
+  noteId: string;
+  startTime: number;
+  expectedDuration: number;
+  lane: number;
+  startTimingQuality: 'perfect' | 'good' | 'late'; // Track how well-timed the start was
+}
+
 interface NoteFallProps {
   onMidiMessage: (note: number, isNoteOn: boolean) => void;
-  activeMidiNotes: Map<number, any>;
+  activeMidiNotes: Map<number, { velocity: number; timestamp: number }>;
 }
 
 // Color scheme for notes A-G with neon colors
@@ -105,7 +117,7 @@ const getDynamicDimensions = (gameAreaRef: React.RefObject<HTMLDivElement | null
   };
 };
 
-export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallProps) {
+export default function NoteFall({ activeMidiNotes }: NoteFallProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
@@ -125,6 +137,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
   const gameLoopRef = useRef<number>();
   const recentKeyPresses = useRef<MidiPressEvent[]>([]);
   const previousActiveMidiNotes = useRef<Set<number>>(new Set());
+  const activeHoldNotes = useRef<Map<number, ActiveHoldNote>>(new Map()); // lane -> active hold note
 
   // Convert MIDI note to lane index
   const noteToLane = useCallback((note: number): number => {
@@ -144,13 +157,24 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
     const randomLane = Math.floor(Math.random() * GAME_LANES.length);
     const note = GAME_LANES[randomLane].note;
     
+    // 70% chance for tap notes, 30% chance for hold notes
+    const isHoldNote = Math.random() < 0.3;
+    const noteType: 'tap' | 'hold' = isHoldNote ? 'hold' : 'tap';
+    
+    // Hold notes can be 500ms to 2000ms long
+    const holdDuration = isHoldNote ? 500 + Math.random() * 1500 : 0;
+    
     return {
       id: `note-${noteIdCounter.current++}`,
       note,
       lane: randomLane,
       startTime: Date.now(),
       isHit: false,
-      isMissed: false
+      isMissed: false,
+      type: noteType,
+      duration: holdDuration,
+      holdProgress: 0,
+      isActivelyHeld: false
     };
   }, []);
 
@@ -171,7 +195,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
     }, 1200);
   }, []);
 
-  // Track key presses (note-on events)
+  // Track key presses and releases for hold notes
   useEffect(() => {
     if (!isPlaying) return;
 
@@ -181,7 +205,10 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
     // Find newly pressed keys (keys that are active now but weren't before)
     const newlyPressed = Array.from(currentActiveNotes).filter(note => !previousActive.has(note));
     
-    // Record the key press events with timestamps
+    // Find newly released keys (keys that were active but aren't now)
+    const newlyReleased = Array.from(previousActive).filter(note => !currentActiveNotes.has(note));
+    
+    // Handle key presses
     newlyPressed.forEach(midiNote => {
       const lane = noteToLane(midiNote);
       if (lane !== -1) {
@@ -199,9 +226,86 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       }
     });
     
+    // Handle key releases for hold notes
+    newlyReleased.forEach(midiNote => {
+      const lane = noteToLane(midiNote);
+      if (lane !== -1 && activeHoldNotes.current.has(lane)) {
+        const holdNote = activeHoldNotes.current.get(lane)!;
+        const holdDuration = Date.now() - holdNote.startTime;
+        const completionRatio = Math.min(1, holdDuration / holdNote.expectedDuration);
+        
+        // Evaluate hold note completion, factoring in start timing quality
+        let hitType: 'perfect' | 'good' | 'miss';
+        let points = 0;
+        
+        if (completionRatio >= 0.9) {
+          // Perfect completion, but adjust based on start timing
+          if (holdNote.startTimingQuality === 'perfect') {
+            hitType = 'perfect';
+            points = 150; // Full bonus for perfect start + perfect hold
+          } else if (holdNote.startTimingQuality === 'good') {
+            hitType = 'perfect';
+            points = 125; // Slight reduction for good start
+          } else {
+            hitType = 'good'; // Late start caps at 'good' even with perfect hold
+            points = 100;
+          }
+        } else if (completionRatio >= 0.7) {
+          // Good completion
+          if (holdNote.startTimingQuality === 'perfect') {
+            hitType = 'good';
+            points = 100;
+          } else if (holdNote.startTimingQuality === 'good') {
+            hitType = 'good';
+            points = 85;
+          } else {
+            hitType = 'good'; // Late start with good completion
+            points = 70;
+          }
+        } else {
+          hitType = 'miss';
+          points = 0;
+        }
+        
+        // Mark the note as completed and update score
+        setFallingNotes(prev => 
+          prev.map(n => 
+            n.id === holdNote.noteId 
+              ? { ...n, isHit: true, holdProgress: completionRatio }
+              : n
+          )
+        );
+        
+        if (points > 0) {
+          setScore(prev => prev + points * Math.max(1, Math.floor(combo / 10)));
+          setCombo(prev => prev + 1);
+          
+          setGameStats(prev => ({
+            ...prev,
+            [hitType]: prev[hitType] + 1,
+            streak: prev.streak + 1,
+            maxStreak: Math.max(prev.maxStreak, prev.streak + 1)
+          }));
+        } else {
+          setCombo(0);
+          setGameStats(prev => ({
+            ...prev,
+            miss: prev.miss + 1,
+            streak: 0
+          }));
+        }
+        
+        addHitFeedback(hitType, lane);
+        console.log(`🎵 HOLD ${hitType.toUpperCase()}! Start: ${holdNote.startTimingQuality}, Duration: ${holdDuration}ms/${holdNote.expectedDuration}ms (${Math.round(completionRatio * 100)}%), Points: ${points}`);
+        
+        // Remove from active holds
+        activeHoldNotes.current.delete(lane);
+      }
+    });
+    
     // Update previous state
     previousActiveMidiNotes.current = new Set(currentActiveNotes);
-  }, [activeMidiNotes, isPlaying, noteToLane]);
+  }, [activeMidiNotes, isPlaying, noteToLane, combo, addHitFeedback]);
 
   // Process hits based on key press timing
   useEffect(() => {
@@ -223,60 +327,122 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       let bestTimingDiff = Infinity;
 
       hitTargets.forEach(note => {
-        // Calculate where the note was (in pixels) when the key was pressed
-        const notePositionAtPress = calculateNotePosition(note.startTime, keyPress.timestamp);
-        
-        // Get dynamic dimensions for current game area size
-        const { HIT_ZONE_POSITION_PX, NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
-        
-        // Distance from hit zone center (in pixels)
-        const distanceFromHitZone = Math.abs(notePositionAtPress - HIT_ZONE_POSITION_PX);
-        
-        // Convert pixel distance to timing difference (approximate)
-        const timingDiffMs = (distanceFromHitZone / NOTES_CONTAINER_HEIGHT) * FALL_DURATION;
-        
-        if (timingDiffMs < bestTimingDiff) {
-          bestNote = note;
-          bestTimingDiff = timingDiffMs;
+        if (note.type === 'tap') {
+          // For tap notes, check center position as before
+          const notePositionAtPress = calculateNotePosition(note.startTime, keyPress.timestamp);
+          const { HIT_ZONE_POSITION_PX, NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
+          const distanceFromHitZone = Math.abs(notePositionAtPress - HIT_ZONE_POSITION_PX);
+          const timingDiffMs = (distanceFromHitZone / NOTES_CONTAINER_HEIGHT) * FALL_DURATION;
+          
+          if (timingDiffMs < bestTimingDiff) {
+            bestNote = note;
+            bestTimingDiff = timingDiffMs;
+          }
+        } else if (note.type === 'hold') {
+          // For hold notes, use pixel-based timing similar to tap notes
+          const noteTopPosition = calculateNotePosition(note.startTime, keyPress.timestamp);
+          const noteHeight = (note.duration / FALL_DURATION) * getDynamicDimensions(gameAreaRef).NOTES_CONTAINER_HEIGHT;
+          const noteBottomPosition = noteTopPosition + noteHeight;
+          
+          const { HIT_ZONE_POSITION_PX, HIT_ZONE_HEIGHT, NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
+          const hitZoneTop = HIT_ZONE_POSITION_PX;
+          const hitZoneBottom = HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT;
+          
+          // Perfect timing: when bottom of note aligns with bottom of hit zone
+          // This gives players more time to react and makes long notes more forgiving
+          const idealBottomPosition = hitZoneBottom;
+          const bottomDistanceFromIdeal = Math.abs(noteBottomPosition - idealBottomPosition);
+          
+          // Allow hitting when any part of the note overlaps or has recently passed through hit zone
+          // Extended tolerance range since ideal timing is now later (at bottom of hit zone)
+          const noteInOrNearHitZone = (noteBottomPosition >= hitZoneTop - 20) && // Allow early press when note first enters
+                                      (noteTopPosition <= hitZoneBottom + 50); // Allow late press with more tolerance
+          
+          if (noteInOrNearHitZone) {
+            // Calculate timing diff based on bottom position (ideal start point)
+            const timingDiffMs = (bottomDistanceFromIdeal / NOTES_CONTAINER_HEIGHT) * FALL_DURATION;
+            
+            // Extend timing window for hold notes to account for their length
+            const extendedGoodWindow = GOOD_WINDOW + (note.duration * 0.1); // Add 10% of note duration to timing window
+            
+            if (timingDiffMs <= extendedGoodWindow) {
+              if (timingDiffMs < bestTimingDiff) {
+                bestNote = note;
+                bestTimingDiff = timingDiffMs;
+              }
+            }
+          }
         }
       });
 
       if (bestNote && bestTimingDiff <= GOOD_WINDOW) {
-        let hitType: 'perfect' | 'good';
-        let points = 0;
+        if (bestNote.type === 'tap') {
+          // Handle tap notes (immediate hit)
+          let hitType: 'perfect' | 'good';
+          let points = 0;
 
-        if (bestTimingDiff <= PERFECT_WINDOW) {
-          hitType = 'perfect';
-          points = 100;
-        } else {
-          hitType = 'good';
-          points = 50;
+          if (bestTimingDiff <= PERFECT_WINDOW) {
+            hitType = 'perfect';
+            points = 100;
+          } else {
+            hitType = 'good';
+            points = 50;
+          }
+
+          // Mark note as hit
+          setFallingNotes(prev => 
+            prev.map(n => 
+              n.id === bestNote!.id 
+                ? { ...n, isHit: true }
+                : n
+            )
+          );
+
+          // Update score and combo
+          setScore(prev => prev + points * Math.max(1, Math.floor(combo / 10)));
+          setCombo(prev => prev + 1);
+          
+          setGameStats(prev => ({
+            ...prev,
+            [hitType]: prev[hitType] + 1,
+            streak: prev.streak + 1,
+            maxStreak: Math.max(prev.maxStreak, prev.streak + 1)
+          }));
+
+          // Add visual feedback
+          addHitFeedback(hitType, keyPress.lane);
+          console.log(`🎯 TAP ${hitType.toUpperCase()}! Note: ${GAME_LANES[keyPress.lane].name}, Distance: ${bestTimingDiff.toFixed(1)}ms, Points: ${points}, Combo: ${combo + 1}`);
+          
+        } else if (bestNote.type === 'hold') {
+          // Handle hold notes (start tracking the hold)
+          if (!activeHoldNotes.current.has(keyPress.lane)) {
+            // Determine timing quality based on how close to ideal the start was
+            // Use more granular timing for hold notes to provide better feedback
+            let startTimingQuality: 'perfect' | 'good' | 'late';
+            const extendedGoodWindow = GOOD_WINDOW + (bestNote.duration * 0.1);
+            
+            if (bestTimingDiff <= PERFECT_WINDOW) {
+              startTimingQuality = 'perfect';
+            } else if (bestTimingDiff <= GOOD_WINDOW) {
+              startTimingQuality = 'good';
+            } else if (bestTimingDiff <= extendedGoodWindow) {
+              startTimingQuality = 'late'; // Still acceptable but marked as late
+            } else {
+              startTimingQuality = 'late'; // Very late but still within extended window
+            }
+            
+            const holdNote: ActiveHoldNote = {
+              noteId: bestNote.id,
+              startTime: keyPress.timestamp,
+              expectedDuration: bestNote.duration,
+              lane: keyPress.lane,
+              startTimingQuality: startTimingQuality
+            };
+            
+            activeHoldNotes.current.set(keyPress.lane, holdNote);
+            console.log(`🎵 HOLD STARTED (${startTimingQuality.toUpperCase()})! Note: ${GAME_LANES[keyPress.lane].name}, Expected duration: ${bestNote.duration}ms`);
+          }
         }
-
-        // Mark note as hit
-        setFallingNotes(prev => 
-          prev.map(n => 
-            n.id === bestNote!.id 
-              ? { ...n, isHit: true }
-              : n
-          )
-        );
-
-        // Update score and combo
-        setScore(prev => prev + points * Math.max(1, Math.floor(combo / 10)));
-        setCombo(prev => prev + 1);
-        
-        setGameStats(prev => ({
-          ...prev,
-          [hitType]: prev[hitType] + 1,
-          streak: prev.streak + 1,
-          maxStreak: Math.max(prev.maxStreak, prev.streak + 1)
-        }));
-
-        // Add visual feedback
-        addHitFeedback(hitType, keyPress.lane);
-
-        console.log(`🎯 ${hitType.toUpperCase()}! Note: ${GAME_LANES[keyPress.lane].name}, Distance: ${bestTimingDiff.toFixed(1)}ms, Points: ${points}, Combo: ${combo + 1}`);
         
         // Remove this key press so it doesn't trigger multiple hits
         recentKeyPresses.current = recentKeyPresses.current.filter(
@@ -304,10 +470,40 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       
       setFallingNotes(prev => 
         prev.map(note => {
-          const notePosition = calculateNotePosition(note.startTime, currentTime);
+          const noteTopPosition = calculateNotePosition(note.startTime, currentTime);
+          let updatedNote = { ...note };
+          
+          // Update hold progress and visual feedback for active hold notes
+          if (note.type === 'hold' && activeHoldNotes.current.has(note.lane)) {
+            const holdNote = activeHoldNotes.current.get(note.lane)!;
+            if (holdNote.noteId === note.id) {
+              const holdDuration = currentTime - holdNote.startTime;
+              const progress = Math.min(1, holdDuration / holdNote.expectedDuration);
+              
+              // Check if the note is currently in the correct position for holding
+              const noteHeight = (note.duration / FALL_DURATION) * NOTES_CONTAINER_HEIGHT;
+              const noteBottomPosition = noteTopPosition + noteHeight;
+              const isInHitZone = noteBottomPosition >= HIT_ZONE_POSITION_PX && 
+                                 noteTopPosition <= HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT;
+              
+              updatedNote = { ...note, holdProgress: progress, isActivelyHeld: isInHitZone };
+            }
+          }
           
           // Check if note has passed the hit zone without being hit
-          if (notePosition > HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT && !note.isHit && !note.isMissed) {
+          let notePassedHitZone = false;
+          if (note.type === 'tap') {
+            notePassedHitZone = noteTopPosition > HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT;
+          } else if (note.type === 'hold') {
+            // For hold notes, use the same pixel-based logic as tap notes for consistency
+            // Miss when the bottom of the note has passed beyond the hit zone with tolerance
+            const noteHeight = (note.duration / FALL_DURATION) * NOTES_CONTAINER_HEIGHT;
+            const noteBottomPosition = noteTopPosition + noteHeight;
+            const tolerance = 30; // Same tolerance as in the timing logic
+            notePassedHitZone = noteBottomPosition > HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT + tolerance;
+          }
+          
+          if (notePassedHitZone && !updatedNote.isHit && !updatedNote.isMissed) {
             // Miss!
             setCombo(0);
             setGameStats(prevStats => ({
@@ -315,12 +511,18 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
               miss: prevStats.miss + 1,
               streak: 0
             }));
-            addHitFeedback('miss', note.lane);
-            console.log(`❌ MISS! Note: ${GAME_LANES[note.lane].name}`);
-            return { ...note, isMissed: true };
+            addHitFeedback('miss', updatedNote.lane);
+            console.log(`❌ MISS! Note: ${GAME_LANES[updatedNote.lane].name}`);
+            
+            // Clean up any active hold tracking
+            if (updatedNote.type === 'hold' && activeHoldNotes.current.has(updatedNote.lane)) {
+              activeHoldNotes.current.delete(updatedNote.lane);
+            }
+            
+            return { ...updatedNote, isMissed: true };
           }
           
-          return note;
+          return updatedNote;
         }).filter(note => {
           // Remove notes that are off-screen - this fixes the cleanup issue!
           const notePosition = calculateNotePosition(note.startTime, currentTime);
@@ -434,19 +636,46 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
             const currentTime = Date.now();
             const notePositionPx = calculateNotePosition(note.startTime, currentTime);
             const lane = GAME_LANES[note.lane];
+            const { NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
+            
+            // Calculate note height based on type and duration
+            let noteHeight = 45; // Default tap note height
+            if (note.type === 'hold') {
+              // Convert duration to pixels using same scale as falling speed
+              const durationInPixels = (note.duration / FALL_DURATION) * NOTES_CONTAINER_HEIGHT;
+              noteHeight = Math.max(45, Math.min(200, durationInPixels)); // Min 45px, max 200px
+            }
             
             return (
               <div
                 key={note.id}
-                className={`falling-note ${note.isHit ? 'hit' : ''} ${note.isMissed ? 'missed' : ''}`}
+                className={`falling-note ${note.type} ${note.isHit ? 'hit' : ''} ${note.isMissed ? 'missed' : ''} ${note.isActivelyHeld ? 'actively-held' : ''}`}
                 style={{
                   '--lane-index': note.lane,
                   '--lane-color': lane.color,
+                  '--note-height': `${noteHeight}px`,
+                  '--hold-progress': note.holdProgress,
                   top: `${notePositionPx}px`,
+                  height: `${noteHeight}px`,
                 } as React.CSSProperties}
               >
                 <div className="note-inner">
-                  <div className="note-label">{lane.name}</div>
+                  <div className="note-label">
+                    {lane.name}
+                    {note.type === 'hold' && (
+                      <div className="note-duration">
+                        {Math.round(note.duration)}ms
+                      </div>
+                    )}
+                  </div>
+                  {note.type === 'hold' && (
+                    <div className="hold-progress-bar">
+                      <div 
+                        className="hold-progress-fill"
+                        style={{ height: `${note.holdProgress * 100}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             );
