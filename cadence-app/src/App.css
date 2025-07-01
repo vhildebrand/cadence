@@ -235,12 +235,23 @@
   border-radius: 20px;
   font-weight: 600;
   font-size: 0.9rem;
+  transition: all 0.3s ease;
 }
 
 .note-chip.user {
   background: rgba(34, 197, 94, 0.2);
   border-color: #22c55e;
   color: #4ade80;
+}
+
+.note-chip.active-note {
+  animation: pulse 2s infinite;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .placeholder {
@@ -250,21 +261,85 @@
 
 /* Feedback */
 .feedback {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid #22c55e;
   border-radius: 12px;
   padding: 1.5rem;
   margin-top: 1.5rem;
+  border: 1px solid;
+}
+
+.feedback.correct {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: #22c55e;
+}
+
+.feedback.incorrect {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
 }
 
 .feedback h3 {
   margin: 0 0 0.5rem 0;
+}
+
+.feedback.correct h3 {
   color: #22c55e;
 }
 
+.feedback.incorrect h3 {
+  color: #ef4444;
+}
+
 .feedback p {
-  margin: 0;
+  margin: 0 0 1rem 0;
   font-size: 1.1rem;
+}
+
+/* Active Notes Display */
+.active-notes-display {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(34, 197, 94, 0.05);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 12px;
+}
+
+.active-notes-display h3 {
+  margin: 0 0 1rem 0;
+  color: #4ade80;
+  font-size: 1.1rem;
+}
+
+.active-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.active-note-card {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid #22c55e;
+  border-radius: 8px;
+  padding: 0.75rem;
+  text-align: center;
+  animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+  from { box-shadow: 0 0 5px rgba(34, 197, 94, 0.3); }
+  to { box-shadow: 0 0 15px rgba(34, 197, 94, 0.6); }
+}
+
+.active-note-card .note-name {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #4ade80;
+  margin-bottom: 0.25rem;
+}
+
+.active-note-card .note-details {
+  font-size: 0.8rem;
+  color: #86efac;
+  opacity: 0.8;
 }
 
 /* MIDI Message Display */
@@ -274,6 +349,12 @@
   padding: 1.5rem;
   border: 2px solid;
   margin-bottom: 1rem;
+}
+
+.midi-message h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #b4b4c4;
 }
 
 .midi-message.noteOn {
@@ -288,9 +369,10 @@
 
 .midi-note {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 .note-name {
@@ -302,6 +384,23 @@
 .note-number {
   font-size: 1rem;
   color: #888;
+}
+
+.event-type {
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.event-type.noteOn {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.event-type.noteOff {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
 }
 
 .midi-details {
@@ -354,6 +453,7 @@
   padding: 0.25rem 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 0.9rem;
+  gap: 0.5rem;
 }
 
 .history-item:last-child {
@@ -370,6 +470,11 @@
 
 .history-item .note {
   font-weight: 600;
+  flex: 1;
+}
+
+.history-item .event {
+  font-size: 1rem;
 }
 
 .history-item .velocity {
@@ -400,5 +505,13 @@
   .midi-details {
     grid-template-columns: 1fr;
     text-align: center;
+  }
+  
+  .active-notes-grid {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+  
+  .midi-note {
+    justify-content: center;
   }
 }

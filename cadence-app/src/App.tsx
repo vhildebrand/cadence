@@ -10,6 +10,13 @@ interface MidiMessage {
   timestamp: number;
 }
 
+// Define active note type
+interface ActiveNote {
+  note: number;
+  velocity: number;
+  timestamp: number;
+}
+
 // Define the drill state type
 interface DrillState {
   isActive: boolean;
@@ -24,6 +31,7 @@ interface DrillState {
 function App() {
   const [midiMessage, setMidiMessage] = useState<MidiMessage | null>(null)
   const [midiHistory, setMidiHistory] = useState<MidiMessage[]>([])
+  const [activeMidiNotes, setActiveMidiNotes] = useState<Map<number, ActiveNote>>(new Map())
   const [midiAccess, setMidiAccess] = useState<any>(null);
   const [midiStatus, setMidiStatus] = useState<string>('Not connected');
   const [connectedDevices, setConnectedDevices] = useState<string[]>([]);
@@ -120,7 +128,7 @@ function App() {
         timestamp: Date.now()
       };
       
-      console.log(`MIDI ${isNoteOn ? 'Note On' : 'Note Off'}: Note ${noteNumber}, Velocity ${velocity}, Channel ${channel}`);
+      console.log(`MIDI ${isNoteOn ? 'Note On' : 'Note Off'}: Note ${noteNumber} (${noteNumberToName(noteNumber)}), Velocity ${velocity}, Channel ${channel}`);
       
       setMidiMessage(midiMessage);
       
@@ -130,23 +138,101 @@ function App() {
         return newHistory.slice(0, 10);
       });
 
-      // If drill is active and this is a note on, add to user answer
-      if (drillState.isActive && isNoteOn) {
-        setDrillState(prev => ({
-          ...prev,
-          userAnswer: [...prev.userAnswer, noteNumber]
-        }));
-      }
+      // Update active notes
+      setActiveMidiNotes(prev => {
+        const newActiveNotes = new Map(prev);
+        if (isNoteOn) {
+          newActiveNotes.set(noteNumber, {
+            note: noteNumber,
+            velocity: velocity,
+            timestamp: Date.now()
+          });
+        } else {
+          newActiveNotes.delete(noteNumber);
+        }
+        
+        // If drill is active, update user answer with currently active notes
+        if (drillState.isActive) {
+          const activeNoteNumbers = Array.from(newActiveNotes.keys()).sort();
+          setDrillState(prev => ({
+            ...prev,
+            userAnswer: activeNoteNumbers
+          }));
+          
+          // Auto-evaluate when user has played the expected number of notes
+          if (activeNoteNumbers.length === drillState.expectedNotes.length && activeNoteNumbers.length > 0) {
+            setTimeout(() => {
+              evaluateCurrentAnswer(activeNoteNumbers);
+            }, 500); // Small delay to allow for chord input
+          }
+        }
+        
+        return newActiveNotes;
+      });
+    }
+  };
+
+  const evaluateCurrentAnswer = async (userAnswer: number[]) => {
+    if (!drillState.isActive || userAnswer.length === 0) return;
+    
+    console.log('🎯 Evaluating answer:', {
+      expected: drillState.expectedNotes.map(n => noteNumberToName(n)),
+      user: userAnswer.map(n => noteNumberToName(n))
+    });
+    
+    setIsRunningDrill(true);
+    
+    try {
+      // Send user answer to LangGraph for evaluation
+      const evaluationData = {
+        expected_notes: drillState.expectedNotes,
+        user_answer: userAnswer,
+        current_score: drillState.score,
+        current_streak: drillState.streak
+      };
+      
+      const result = await (window as any).electronAPI.runCadenceGraph('evaluate_answer', JSON.stringify(evaluationData));
+      const evaluation = JSON.parse(result);
+      
+      // Log the feedback to console
+      const isCorrect = evaluation.feedback.includes('✅');
+      console.log(`${isCorrect ? '✅ CORRECT!' : '❌ INCORRECT'}: ${evaluation.feedback}`);
+      console.log(`Score: ${evaluation.score}, Streak: ${evaluation.streak}`);
+      
+      setDrillState(prev => ({
+        ...prev,
+        feedback: evaluation.feedback,
+        score: evaluation.score,
+        streak: evaluation.streak,
+        isActive: false // End current drill
+      }));
+      
+    } catch (error) {
+      console.error('Error evaluating answer:', error);
+      setDrillState(prev => ({
+        ...prev,
+        feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }));
+    } finally {
+      setIsRunningDrill(false);
     }
   };
 
   const startIntervalDrill = async () => {
     setIsRunningDrill(true);
     
+    // Clear any currently active notes
+    setActiveMidiNotes(new Map());
+    
     try {
       // Call the LangGraph script to start a drill
       const result = await (window as any).electronAPI.runCadenceGraph('start_drill');
       const drillData = JSON.parse(result);
+      
+      console.log('🎵 New drill started:', {
+        prompt: drillData.prompt,
+        expectedNotes: drillData.expected_notes.map((n: number) => noteNumberToName(n))
+      });
       
       setDrillState({
         isActive: true,
@@ -170,39 +256,8 @@ function App() {
   };
 
   const evaluateAnswer = async () => {
-    if (!drillState.isActive || drillState.userAnswer.length === 0) return;
-    
-    setIsRunningDrill(true);
-    
-    try {
-      // Send user answer to LangGraph for evaluation
-      const evaluationData = {
-        expected_notes: drillState.expectedNotes,
-        user_answer: drillState.userAnswer,
-        current_score: drillState.score,
-        current_streak: drillState.streak
-      };
-      
-      const result = await (window as any).electronAPI.runCadenceGraph('evaluate_answer', JSON.stringify(evaluationData));
-      const evaluation = JSON.parse(result);
-      
-      setDrillState(prev => ({
-        ...prev,
-        feedback: evaluation.feedback,
-        score: evaluation.score,
-        streak: evaluation.streak,
-        isActive: false // End current drill
-      }));
-      
-    } catch (error) {
-      console.error('Error evaluating answer:', error);
-      setDrillState(prev => ({
-        ...prev,
-        feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      }));
-    } finally {
-      setIsRunningDrill(false);
-    }
+    const userAnswer = Array.from(activeMidiNotes.keys()).sort();
+    await evaluateCurrentAnswer(userAnswer);
   };
 
   const resetDrill = () => {
@@ -215,6 +270,7 @@ function App() {
       score: 0,
       streak: 0
     });
+    setActiveMidiNotes(new Map());
   };
 
   // Helper function to convert MIDI note number to note name
@@ -311,16 +367,16 @@ function App() {
               </div>
 
               <div className="user-answer">
-                <strong>Your Answer:</strong>
+                <strong>Currently Pressed Keys:</strong>
                 <div className="note-list">
-                  {drillState.userAnswer.length > 0 ? (
-                    drillState.userAnswer.map((note, index) => (
-                      <span key={index} className="note-chip user">
+                  {activeMidiNotes.size > 0 ? (
+                    Array.from(activeMidiNotes.keys()).sort().map((note) => (
+                      <span key={note} className="note-chip user active-note">
                         {noteNumberToName(note)}
                       </span>
                     ))
                   ) : (
-                    <span className="placeholder">Play the notes on your keyboard...</span>
+                    <span className="placeholder">Press keys on your keyboard...</span>
                   )}
                 </div>
               </div>
@@ -328,7 +384,7 @@ function App() {
               <div className="drill-controls">
                 <button 
                   onClick={evaluateAnswer} 
-                  disabled={isRunningDrill || drillState.userAnswer.length === 0}
+                  disabled={isRunningDrill || activeMidiNotes.size === 0}
                   className="button primary"
                 >
                   {isRunningDrill ? 'Evaluating...' : 'Submit Answer'}
@@ -341,9 +397,12 @@ function App() {
           )}
 
           {drillState.feedback && (
-            <div className="feedback">
+            <div className={`feedback ${drillState.feedback.includes('✅') ? 'correct' : 'incorrect'}`}>
               <h3>Feedback:</h3>
               <p>{drillState.feedback}</p>
+              <button onClick={startIntervalDrill} className="button primary">
+                Next Challenge
+              </button>
             </div>
           )}
         </section>
@@ -352,11 +411,36 @@ function App() {
         <section className="section">
           <h2>Live MIDI Input</h2>
           
+          {/* Currently Active Notes */}
+          {activeMidiNotes.size > 0 && (
+            <div className="active-notes-display">
+              <h3>🎹 Currently Pressed Keys:</h3>
+              <div className="active-notes-grid">
+                {Array.from(activeMidiNotes.entries())
+                  .sort(([a], [b]) => a - b)
+                  .map(([note, noteData]) => (
+                    <div key={note} className="active-note-card">
+                      <div className="note-name">{noteNumberToName(note)}</div>
+                      <div className="note-details">
+                        <div>Note #{note}</div>
+                        <div>Velocity: {noteData.velocity}</div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Last MIDI Message */}
           {midiMessage ? (
             <div className={`midi-message ${midiMessage.type}`}>
+              <h3>Last MIDI Event:</h3>
               <div className="midi-note">
                 <span className="note-name">{noteNumberToName(midiMessage.note)}</span>
                 <span className="note-number">#{midiMessage.note}</span>
+                <span className={`event-type ${midiMessage.type}`}>
+                  {midiMessage.type === 'noteOn' ? '🎹 Press' : '🔇 Release'}
+                </span>
               </div>
               <div className="midi-details">
                 <div>Velocity: {midiMessage.velocity}</div>
@@ -379,6 +463,7 @@ function App() {
                 {midiHistory.map((msg, index) => (
                   <div key={`${msg.timestamp}-${index}`} className={`history-item ${msg.type}`}>
                     <span className="note">{noteNumberToName(msg.note)}</span>
+                    <span className="event">{msg.type === 'noteOn' ? '▶' : '⏹'}</span>
                     <span className="velocity">vel: {msg.velocity}</span>
                   </div>
                 ))}
