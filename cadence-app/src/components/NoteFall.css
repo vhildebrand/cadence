@@ -263,12 +263,12 @@
   z-index: 3;
 }
 
-/* Falling Notes - Simplified for Performance */
+/* Falling Notes - Dynamic width based on total lanes */
 .falling-note {
   position: absolute;
-  width: calc(100% / 24 - 4px);
+  width: calc(100% / var(--total-lanes) - 4px);
   min-height: 45px;
-  left: calc(var(--lane-index) * (100% / 24) + 2px);
+  left: calc(var(--lane-index) * (100% / var(--total-lanes)) + 2px);
   transition: none;
   z-index: 4;
   border-radius: 12px;
@@ -480,10 +480,10 @@
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
-/* Hit Feedback - Simplified */
+/* Hit Feedback - Dynamic positioning */
 .hit-feedback {
   position: absolute;
-  left: calc(var(--lane-index) * (100% / 24) + (100% / 24) * 0.5);
+  left: calc(var(--lane-index) * (100% / var(--total-lanes)) + (100% / var(--total-lanes)) * 0.5);
   bottom: 180px;
   transform: translateX(-50%);
   font-size: 1.5rem;
@@ -584,7 +584,9 @@
   }
   
   .falling-note {
-    height: 35px;
+    min-height: 35px;
+    width: calc(100% / var(--total-lanes) - 2px);
+    left: calc(var(--lane-index) * (100% / var(--total-lanes)) + 1px);
   }
   
   .note-label {
@@ -614,7 +616,9 @@
   }
   
   .falling-note {
-    height: 30px;
+    min-height: 30px;
+    width: calc(100% / var(--total-lanes) - 2px);
+    left: calc(var(--lane-index) * (100% / var(--total-lanes)) + 1px);
   }
   
   .note-label {

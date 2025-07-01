@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './NoteFall.css';
 
 interface FallingNote {
@@ -38,6 +38,10 @@ interface ActiveHoldNote {
 interface NoteFallProps {
   onMidiMessage: (note: number, isNoteOn: boolean) => void;
   activeMidiNotes: Map<number, { velocity: number; timestamp: number }>;
+  noteRange?: {
+    startOctave: number;
+    endOctave: number;
+  };
 }
 
 // Color scheme for notes A-G with neon colors
@@ -56,16 +60,15 @@ const NOTE_COLORS = {
   'B': '#4488ff', // Blue
 };
 
-// Define all notes from C4 to C6 (24 notes) - organized as lanes for Guitar Hero style
-const GAME_LANES = (() => {
+// Generate game lanes based on configurable range
+const generateGameLanes = (startOctave: number = 4, endOctave: number = 6) => {
   const notes = [];
   const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   
-  // C4 starts at MIDI note 60, C6 is at MIDI note 84
-  for (let octave = 4; octave <= 6; octave++) {
+  for (let octave = startOctave; octave <= endOctave; octave++) {
     for (let i = 0; i < 12; i++) {
       const midiNote = octave * 12 + i + 12; // MIDI formula
-      if (midiNote > 84) break; // Stop at C6
+      if (midiNote > 127) break; // MIDI note range limit
       
       const noteName = noteNames[i];
       const isBlackKey = noteName.includes('#');
@@ -82,9 +85,9 @@ const GAME_LANES = (() => {
   }
   
   return notes;
-})();
+};
 
-const FALL_DURATION = 4000; // 4 seconds for note to fall
+const FALL_DURATION = 6000; // 6 seconds for note to fall (increased for better visibility)
 const PERFECT_WINDOW = 100; // Perfect timing window in ms
 const GOOD_WINDOW = 200; // Good timing window in ms
 
@@ -117,7 +120,7 @@ const getDynamicDimensions = (gameAreaRef: React.RefObject<HTMLDivElement | null
   };
 };
 
-export default function NoteFall({ activeMidiNotes }: NoteFallProps) {
+export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
@@ -139,10 +142,17 @@ export default function NoteFall({ activeMidiNotes }: NoteFallProps) {
   const previousActiveMidiNotes = useRef<Set<number>>(new Set());
   const activeHoldNotes = useRef<Map<number, ActiveHoldNote>>(new Map()); // lane -> active hold note
 
+  // Generate game lanes based on note range
+  const GAME_LANES = useMemo(() => {
+    const startOctave = noteRange?.startOctave ?? 4;
+    const endOctave = noteRange?.endOctave ?? 6;
+    return generateGameLanes(startOctave, endOctave);
+  }, [noteRange]);
+
   // Convert MIDI note to lane index
   const noteToLane = useCallback((note: number): number => {
     return GAME_LANES.findIndex(lane => lane.note === note);
-  }, []);
+  }, [GAME_LANES]);
 
   // Calculate note position in pixels within the notes container
   const calculateNotePosition = useCallback((startTime: number, currentTime: number): number => {
@@ -563,7 +573,7 @@ export default function NoteFall({ activeMidiNotes }: NoteFallProps) {
     lastNoteSpawn.current = Date.now();
     recentKeyPresses.current = [];
     previousActiveMidiNotes.current = new Set();
-    console.log('🎮 Full Keyboard Note Fall game started! (C4-C6)');
+    console.log(`🎮 Note Fall game started! Range: ${GAME_LANES[0]?.name} to ${GAME_LANES[GAME_LANES.length - 1]?.name} (${GAME_LANES.length} keys)`);
   };
 
   const stopGame = () => {
@@ -598,29 +608,13 @@ export default function NoteFall({ activeMidiNotes }: NoteFallProps) {
         </div>
       </div>
 
-      <div className="game-stats">
-        <div className="stat">
-          <span className="stat-label">Score</span>
-          <span className="stat-value">{score.toLocaleString()}</span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Combo</span>
-          <span className="stat-value combo-value">{combo}x</span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Streak</span>
-          <span className="stat-value">{gameStats.streak}</span>
-        </div>
-      </div>
 
-      <div className="detailed-stats">
-        <div className="stat-item perfect">Perfect: {gameStats.perfect}</div>
-        <div className="stat-item good">Good: {gameStats.good}</div>
-        <div className="stat-item miss">Miss: {gameStats.miss}</div>
-        <div className="stat-item">Max Streak: {gameStats.maxStreak}</div>
-      </div>
 
-      <div className="game-area" ref={gameAreaRef}>
+      <div 
+        className="game-area" 
+        ref={gameAreaRef}
+        style={{ '--total-lanes': GAME_LANES.length } as React.CSSProperties}
+      >
         {/* Lane Headers - Guitar Hero Style */}
         <div className="lane-headers">
           {GAME_LANES.map((lane, index) => (
@@ -720,7 +714,7 @@ export default function NoteFall({ activeMidiNotes }: NoteFallProps) {
 
       <div className="game-instructions">
         <p>🎹 Play the highlighted keys as the glowing notes reach the hit zone!</p>
-        <p>Full keyboard: C4 ({60}) to C6 ({84}) - {GAME_LANES.length} keys total</p>
+        <p>Note range: {GAME_LANES[0]?.name} ({GAME_LANES[0]?.note}) to {GAME_LANES[GAME_LANES.length - 1]?.name} ({GAME_LANES[GAME_LANES.length - 1]?.note}) - {GAME_LANES.length} keys total</p>
         <p>Timing is everything - press at the RIGHT moment for maximum points!</p>
       </div>
     </div>

@@ -40,6 +40,12 @@ function App() {
   const [midiStatus, setMidiStatus] = useState<string>('Not connected');
   const [connectedDevices, setConnectedDevices] = useState<string[]>([]);
   
+  // Note Fall configuration
+  const [noteRange, setNoteRange] = useState({
+    startOctave: 4,
+    endOctave: 6
+  });
+  
   // Drill state
   const [drillState, setDrillState] = useState<DrillState>({
     isActive: false,
@@ -318,6 +324,27 @@ function App() {
                 Note Fall
               </button>
             </nav>
+            <div className="note-range-controls">
+              <label>Note Range:</label>
+              <select 
+                value={noteRange.startOctave} 
+                onChange={(e) => setNoteRange(prev => ({...prev, startOctave: parseInt(e.target.value)}))}
+              >
+                <option value={3}>C3</option>
+                <option value={4}>C4</option>
+                <option value={5}>C5</option>
+              </select>
+              <span>to</span>
+              <select 
+                value={noteRange.endOctave} 
+                onChange={(e) => setNoteRange(prev => ({...prev, endOctave: parseInt(e.target.value)}))}
+              >
+                <option value={4}>C4</option>
+                <option value={5}>C5</option>
+                <option value={6}>C6</option>
+                <option value={7}>C7</option>
+              </select>
+            </div>
           </div>
           <div className="midi-status-compact">
             <span className={`status-dot ${connectedDevices.length > 0 ? 'connected' : 'disconnected'}`}></span>
@@ -328,6 +355,7 @@ function App() {
         <NoteFall 
           onMidiMessage={handleNoteFallMIDI}
           activeMidiNotes={activeMidiNotes}
+          noteRange={noteRange}
         />
       </div>
     );

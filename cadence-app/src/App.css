@@ -42,6 +42,37 @@
   border: 1px solid #3a3a4a;
 }
 
+.note-range-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #b4b4c4;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #3a3a4a;
+}
+
+.note-range-controls label {
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.note-range-controls select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.note-range-controls select:focus {
+  outline: none;
+  border-color: #646cff;
+}
+
 .midi-status-compact {
   display: flex;
   align-items: center;
