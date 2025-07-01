@@ -12,8 +12,8 @@ if (require('electron-squirrel-startup')) {
 }
 function createWindow() {
     const win = new electron_1.BrowserWindow({
-        width: 800,
-        height: 600,
+        width: 1200,
+        height: 800,
         webPreferences: {
             preload: path_1.default.join(__dirname, 'preload.js'),
             sandbox: false,
@@ -78,6 +78,53 @@ electron_1.ipcMain.handle('run-python-hello', async () => {
         });
         shell.on('error', (err) => {
             console.error('Python shell error:', err);
+            reject(err);
+        });
+    });
+});
+// Python bridge IPC handler for running cadence_graph.py
+electron_1.ipcMain.handle('run-cadence-graph', async (event, command, args) => {
+    return new Promise((resolve, reject) => {
+        const scriptsDir = path_1.default.join(__dirname, '..', 'scripts');
+        const scriptName = 'cadence_graph.py';
+        // Use system Python3
+        const pythonPath = process.platform === 'win32'
+            ? 'python'
+            : 'python3';
+        // Build arguments array
+        const scriptArgs = [command];
+        if (args) {
+            scriptArgs.push(args);
+        }
+        const options = {
+            mode: 'text',
+            pythonPath: pythonPath,
+            scriptPath: scriptsDir,
+            args: scriptArgs,
+        };
+        console.log('Running Cadence Graph script:', scriptName);
+        console.log('Command:', command);
+        console.log('Args:', args);
+        console.log('From directory:', scriptsDir);
+        const shell = new python_shell_1.PythonShell(scriptName, options);
+        let output = [];
+        let errorOutput = [];
+        shell.on('message', (message) => {
+            console.log('Cadence Graph output:', message);
+            output.push(message);
+        });
+        shell.on('stderr', (stderr) => {
+            console.error('Cadence Graph stderr:', stderr);
+            errorOutput.push(stderr);
+        });
+        shell.on('close', () => {
+            const result = output.length > 0 ? output.join('\n') :
+                errorOutput.length > 0 ? `Error: ${errorOutput.join('\n')}` :
+                    'No output from Cadence Graph script';
+            resolve(result);
+        });
+        shell.on('error', (err) => {
+            console.error('Cadence Graph shell error:', err);
             reject(err);
         });
     });
