@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
+import NoteFall from './components/NoteFall'
 
 // Define the MIDI message type
 interface MidiMessage {
@@ -28,7 +29,10 @@ interface DrillState {
   streak: number;
 }
 
+type AppMode = 'interval-drill' | 'note-fall';
+
 function App() {
+  const [currentMode, setCurrentMode] = useState<AppMode>('interval-drill');
   const [midiMessage, setMidiMessage] = useState<MidiMessage | null>(null)
   const [midiHistory, setMidiHistory] = useState<MidiMessage[]>([])
   const [activeMidiNotes, setActiveMidiNotes] = useState<Map<number, ActiveNote>>(new Map())
@@ -152,7 +156,7 @@ function App() {
         }
         
         // If drill is active, update user answer with currently active notes
-        if (drillState.isActive) {
+        if (currentMode === 'interval-drill' && drillState.isActive) {
           const activeNoteNumbers = Array.from(newActiveNotes.keys()).sort();
           setDrillState(prev => ({
             ...prev,
@@ -287,10 +291,69 @@ function App() {
     window.location.reload();
   };
 
+  // Handle MIDI message for NoteFall component
+  const handleNoteFallMIDI = (note: number, isNoteOn: boolean) => {
+    // This is called from NoteFall component if needed
+    console.log(`NoteFall MIDI: ${isNoteOn ? 'On' : 'Off'} - ${noteNumberToName(note)}`);
+  };
+
+  // If we're in NoteFall mode, render the NoteFall component
+  if (currentMode === 'note-fall') {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <div className="header-content">
+            <h1>🎹 Cadence</h1>
+            <nav className="mode-nav">
+              <button 
+                onClick={() => setCurrentMode('interval-drill')}
+                className="button secondary"
+              >
+                Interval Drill
+              </button>
+              <button 
+                onClick={() => setCurrentMode('note-fall')}
+                className="button primary"
+              >
+                Note Fall
+              </button>
+            </nav>
+          </div>
+          <div className="midi-status-compact">
+            <span className={`status-dot ${connectedDevices.length > 0 ? 'connected' : 'disconnected'}`}></span>
+            {connectedDevices.length > 0 ? `${connectedDevices.length} MIDI device(s)` : 'No MIDI'}
+          </div>
+        </header>
+
+        <NoteFall 
+          onMidiMessage={handleNoteFallMIDI}
+          activeMidiNotes={activeMidiNotes}
+        />
+      </div>
+    );
+  }
+
+  // Default: Interval Drill mode
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🎹 Cadence</h1>
+        <div className="header-content">
+          <h1>🎹 Cadence</h1>
+          <nav className="mode-nav">
+            <button 
+              onClick={() => setCurrentMode('interval-drill')}
+              className="button primary"
+            >
+              Interval Drill
+            </button>
+            <button 
+              onClick={() => setCurrentMode('note-fall')}
+              className="button secondary"
+            >
+              Note Fall
+            </button>
+          </nav>
+        </div>
         <p className="subtitle">Intelligent MIDI Ear Trainer</p>
       </header>
 
