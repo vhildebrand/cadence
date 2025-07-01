@@ -17,22 +17,63 @@ interface HitFeedback {
   timestamp: number;
 }
 
+interface MidiPressEvent {
+  note: number;
+  timestamp: number;
+  lane: number;
+}
+
 interface NoteFallProps {
   onMidiMessage: (note: number, isNoteOn: boolean) => void;
   activeMidiNotes: Map<number, any>;
 }
 
-// Define the lanes (keys we'll use for the game)
-const GAME_LANES = [
-  { note: 60, name: 'C4', color: '#ff4444' },  // C4 - Red
-  { note: 62, name: 'D4', color: '#ff8844' },  // D4 - Orange  
-  { note: 64, name: 'E4', color: '#ffff44' },  // E4 - Yellow
-  { note: 65, name: 'F4', color: '#44ff44' },  // F4 - Green
-  { note: 67, name: 'G4', color: '#4444ff' },  // G4 - Blue
-];
+// Color scheme for notes A-G
+const NOTE_COLORS = {
+  'C': '#ff4444', // Red
+  'C#': '#ff6b44', // Red-Orange
+  'D': '#ff8844', // Orange
+  'D#': '#ffaa44', // Orange-Yellow
+  'E': '#ffcc44', // Yellow
+  'F': '#ccff44', // Yellow-Green
+  'F#': '#88ff44', // Green-Yellow
+  'G': '#44ff44', // Green
+  'G#': '#44ff88', // Green-Cyan
+  'A': '#44ffcc', // Cyan
+  'A#': '#44ccff', // Cyan-Blue
+  'B': '#4488ff', // Blue
+};
 
-const FALL_DURATION = 3000; // 3 seconds for note to fall
-const HIT_ZONE_HEIGHT = 60; // Height of the hit zone in pixels
+// Define all notes from C4 to C6 (24 notes)
+const GAME_LANES = (() => {
+  const notes = [];
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  
+  // C4 starts at MIDI note 60, C6 is at MIDI note 84
+  for (let octave = 4; octave <= 6; octave++) {
+    for (let i = 0; i < 12; i++) {
+      const midiNote = octave * 12 + i + 12; // MIDI formula
+      if (midiNote > 84) break; // Stop at C6
+      
+      const noteName = noteNames[i];
+      const isBlackKey = noteName.includes('#');
+      
+      notes.push({
+        note: midiNote,
+        name: `${noteName}${octave}`,
+        noteName: noteName, // Just the note name without octave
+        octave,
+        isBlackKey,
+        color: NOTE_COLORS[noteName as keyof typeof NOTE_COLORS]
+      });
+    }
+  }
+  
+  return notes;
+})();
+
+const FALL_DURATION = 4000; // 4 seconds for note to fall
+const HIT_ZONE_POSITION = 85; // Percentage down the screen where hit zone is
 const PERFECT_WINDOW = 100; // Perfect timing window in ms
 const GOOD_WINDOW = 200; // Good timing window in ms
 
@@ -54,13 +95,15 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
   const noteIdCounter = useRef(0);
   const lastNoteSpawn = useRef(0);
   const gameLoopRef = useRef<number>();
+  const recentKeyPresses = useRef<MidiPressEvent[]>([]);
+  const previousActiveMidiNotes = useRef<Set<number>>(new Set());
 
   // Convert MIDI note to lane index
   const noteToLane = useCallback((note: number): number => {
     return GAME_LANES.findIndex(lane => lane.note === note);
   }, []);
 
-  // Generate a random note
+  // Generate a random note within C4-C6 range
   const generateRandomNote = useCallback((): FallingNote => {
     const randomLane = Math.floor(Math.random() * GAME_LANES.length);
     const note = GAME_LANES[randomLane].note;
@@ -92,63 +135,89 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
     }, 1000);
   }, []);
 
-  // Check for hits when MIDI input changes
+  // Track key presses (note-on events)
   useEffect(() => {
     if (!isPlaying) return;
 
-    const currentTime = Date.now();
-    const activeNotes = Array.from(activeMidiNotes.keys());
-
-    activeNotes.forEach(midiNote => {
+    const currentActiveNotes = new Set(activeMidiNotes.keys());
+    const previousActive = previousActiveMidiNotes.current;
+    
+    // Find newly pressed keys (keys that are active now but weren't before)
+    const newlyPressed = Array.from(currentActiveNotes).filter(note => !previousActive.has(note));
+    
+    // Record the key press events with timestamps
+    newlyPressed.forEach(midiNote => {
       const lane = noteToLane(midiNote);
-      if (lane === -1) return; // Note not in our game lanes
+      if (lane !== -1) {
+        const pressEvent: MidiPressEvent = {
+          note: midiNote,
+          timestamp: Date.now(),
+          lane
+        };
+        recentKeyPresses.current.push(pressEvent);
+        
+        // Keep only recent presses (last 2 seconds)
+        recentKeyPresses.current = recentKeyPresses.current.filter(
+          press => Date.now() - press.timestamp < 2000
+        );
+      }
+    });
+    
+    // Update previous state
+    previousActiveMidiNotes.current = new Set(currentActiveNotes);
+  }, [activeMidiNotes, isPlaying, noteToLane]);
 
+  // Process hits based on key press timing
+  useEffect(() => {
+    if (!isPlaying || recentKeyPresses.current.length === 0) return;
+
+    const currentTime = Date.now();
+
+    // Check each recent key press against falling notes
+    recentKeyPresses.current.forEach(keyPress => {
       // Find notes in this lane that could be hit
       const hitTargets = fallingNotes.filter(note => 
-        note.lane === lane && 
+        note.lane === keyPress.lane && 
         !note.isHit && 
         !note.isMissed
       );
 
       if (hitTargets.length === 0) return;
 
-      // Find the closest note to the hit zone
-      let closestNote = hitTargets[0];
-      let closestDistance = Infinity;
+      // Find the closest note to the hit zone at the time of key press
+      let bestNote: FallingNote | null = null;
+      let bestTimingDiff = Infinity;
 
       hitTargets.forEach(note => {
-        const notePosition = ((currentTime - note.startTime) / FALL_DURATION) * 100;
-        const distance = Math.abs(notePosition - 85); // 85% is roughly the hit zone
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestNote = note;
+        // Calculate where the note was when the key was pressed
+        const noteProgressAtPress = ((keyPress.timestamp - note.startTime) / FALL_DURATION) * 100;
+        const timingDiff = Math.abs(noteProgressAtPress - HIT_ZONE_POSITION);
+        
+        // Convert position difference to milliseconds
+        const timingDiffMs = (timingDiff / 100) * FALL_DURATION;
+        
+        if (timingDiffMs < bestTimingDiff) {
+          bestNote = note;
+          bestTimingDiff = timingDiffMs;
         }
       });
 
-      // Check if the note is in the hit window
-      const notePosition = ((currentTime - closestNote.startTime) / FALL_DURATION) * 100;
-      const hitZoneCenter = 85; // Percentage down the screen
-      const positionDiff = Math.abs(notePosition - hitZoneCenter);
+      if (bestNote && bestTimingDiff <= GOOD_WINDOW) {
+        let hitType: 'perfect' | 'good';
+        let points = 0;
 
-      // Convert position difference to timing (rough approximation)
-      const timingDiff = (positionDiff / 100) * FALL_DURATION;
+        if (bestTimingDiff <= PERFECT_WINDOW) {
+          hitType = 'perfect';
+          points = 100;
+        } else {
+          hitType = 'good';
+          points = 50;
+        }
 
-      let hitType: 'perfect' | 'good' | 'miss' | null = null;
-      let points = 0;
-
-      if (timingDiff <= PERFECT_WINDOW) {
-        hitType = 'perfect';
-        points = 100;
-      } else if (timingDiff <= GOOD_WINDOW) {
-        hitType = 'good';
-        points = 50;
-      }
-
-      if (hitType) {
         // Mark note as hit
         setFallingNotes(prev => 
           prev.map(n => 
-            n.id === closestNote.id 
+            n.id === bestNote!.id 
               ? { ...n, isHit: true }
               : n
           )
@@ -166,12 +235,17 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
         }));
 
         // Add visual feedback
-        addHitFeedback(hitType, lane);
+        addHitFeedback(hitType, keyPress.lane);
 
-        console.log(`🎯 ${hitType.toUpperCase()}! Note: ${GAME_LANES[lane].name}, Points: ${points}, Combo: ${combo + 1}`);
+        console.log(`🎯 ${hitType.toUpperCase()}! Note: ${GAME_LANES[keyPress.lane].name}, Timing: ${bestTimingDiff.toFixed(1)}ms, Points: ${points}, Combo: ${combo + 1}`);
+        
+        // Remove this key press so it doesn't trigger multiple hits
+        recentKeyPresses.current = recentKeyPresses.current.filter(
+          press => press !== keyPress
+        );
       }
     });
-  }, [activeMidiNotes, fallingNotes, isPlaying, noteToLane, combo, addHitFeedback]);
+  }, [fallingNotes, isPlaying, combo, addHitFeedback]);
 
   // Game loop
   useEffect(() => {
@@ -180,8 +254,8 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
     const gameLoop = () => {
       const currentTime = Date.now();
 
-      // Spawn new notes
-      if (currentTime - lastNoteSpawn.current > 800 + Math.random() * 400) { // Random interval between 800-1200ms
+      // Spawn new notes (slightly less frequent due to more lanes)
+      if (currentTime - lastNoteSpawn.current > 600 + Math.random() * 400) { // Random interval between 600-1000ms
         setFallingNotes(prev => [...prev, generateRandomNote()]);
         lastNoteSpawn.current = currentTime;
       }
@@ -192,7 +266,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
           const notePosition = ((currentTime - note.startTime) / FALL_DURATION) * 100;
           
           // Check if note has passed the hit zone without being hit
-          if (notePosition > 95 && !note.isHit && !note.isMissed) {
+          if (notePosition > HIT_ZONE_POSITION + 10 && !note.isHit && !note.isMissed) {
             // Miss!
             setCombo(0);
             setGameStats(prevStats => ({
@@ -239,11 +313,14 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       maxStreak: 0
     });
     lastNoteSpawn.current = Date.now();
-    console.log('🎮 Note Fall game started!');
+    recentKeyPresses.current = [];
+    previousActiveMidiNotes.current = new Set();
+    console.log('🎮 Full Keyboard Note Fall game started! (C4-C6)');
   };
 
   const stopGame = () => {
     setIsPlaying(false);
+    recentKeyPresses.current = [];
     console.log('🎮 Note Fall game stopped!', gameStats);
   };
 
@@ -256,7 +333,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
   return (
     <div className="notefall-container">
       <div className="notefall-header">
-        <h2>🎸 Note Fall</h2>
+        <h2>🎹 Full Keyboard Note Fall</h2>
         <div className="game-controls">
           {!isPlaying ? (
             <button onClick={startGame} className="button primary">
@@ -296,16 +373,19 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       </div>
 
       <div className="game-area" ref={gameAreaRef}>
-        {/* Lane Headers */}
-        <div className="lane-headers">
+        {/* Piano Keyboard at Top */}
+        <div className="piano-keyboard">
           {GAME_LANES.map((lane, index) => (
             <div 
               key={index}
-              className={`lane-header ${activeMidiNotes.has(lane.note) ? 'active' : ''}`}
-              style={{ '--lane-color': lane.color } as React.CSSProperties}
+              className={`piano-key ${lane.isBlackKey ? 'black-key' : 'white-key'} ${activeMidiNotes.has(lane.note) ? 'active' : ''}`}
+              style={{ 
+                '--lane-index': index,
+                '--key-color': lane.color,
+                zIndex: lane.isBlackKey ? 2 : 1
+              } as React.CSSProperties}
             >
-              <div className="lane-note">{lane.name}</div>
-              <div className="lane-indicator"></div>
+              <div className="key-label">{lane.name}</div>
             </div>
           ))}
         </div>
@@ -320,23 +400,29 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
             return (
               <div
                 key={note.id}
-                className={`falling-note ${note.isHit ? 'hit' : ''} ${note.isMissed ? 'missed' : ''}`}
+                className={`falling-note ${lane.isBlackKey ? 'black-note' : 'white-note'} ${note.isHit ? 'hit' : ''} ${note.isMissed ? 'missed' : ''}`}
                 style={{
                   '--lane-index': note.lane,
                   '--progress': `${progress}%`,
-                  '--lane-color': lane.color,
+                  '--note-color': lane.color,
                 } as React.CSSProperties}
               >
-                <div className="note-inner"></div>
+                <div className="note-inner">
+                  <div className="note-label">{lane.name}</div>
+                </div>
               </div>
             );
           })}
         </div>
 
         {/* Hit Zone */}
-        <div className="hit-zone">
-          {GAME_LANES.map((_, index) => (
-            <div key={index} className="hit-zone-lane">
+        <div className="hit-zone" style={{ top: `${HIT_ZONE_POSITION}%` }}>
+          {GAME_LANES.map((lane, index) => (
+            <div 
+              key={index} 
+              className={`hit-zone-lane ${lane.isBlackKey ? 'black-key-zone' : 'white-key-zone'}`}
+              style={{ '--lane-index': index } as React.CSSProperties}
+            >
               <div className="hit-zone-indicator"></div>
             </div>
           ))}
@@ -351,16 +437,17 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
               '--lane-index': feedback.position,
             } as React.CSSProperties}
           >
-            {feedback.type === 'perfect' && '★ PERFECT!'}
-            {feedback.type === 'good' && '✓ GOOD!'}
-            {feedback.type === 'miss' && '✗ MISS!'}
+            {feedback.type === 'perfect' && '★'}
+            {feedback.type === 'good' && '✓'}
+            {feedback.type === 'miss' && '✗'}
           </div>
         ))}
       </div>
 
       <div className="game-instructions">
-        <p>🎹 Play the highlighted keys as the notes reach the bottom bar!</p>
-        <p>Use keys: {GAME_LANES.map(lane => lane.name).join(', ')}</p>
+        <p>🎹 Press keys exactly when the colored notes reach the yellow bar!</p>
+        <p>Range: C4 ({60}) to C6 ({84}) - {GAME_LANES.length} keys total</p>
+        <p>Timing matters - press at the RIGHT moment, not just hold the key!</p>
       </div>
     </div>
   );
