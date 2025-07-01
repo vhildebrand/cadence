@@ -15,15 +15,22 @@ function createWindow() {
         width: 800,
         height: 600,
         webPreferences: {
-            preload: path_1.default.join(__dirname, 'preload.js'), // Important: __dirname points to the dist-electron folder
+            preload: path_1.default.join(__dirname, 'preload.js'),
+            sandbox: false,
+            nodeIntegration: false,
+            contextIsolation: true,
         },
     });
+    // This is the URL of the Vite dev server
     const VITE_DEV_SERVER_URL = 'http://localhost:5173';
-    if (process.env.NODE_ENV === 'development') {
+    // Check if we are in development mode
+    // In development, Vite dev server should be running on localhost:5173
+    if (process.env.NODE_ENV === 'development' || !electron_1.app.isPackaged) {
         win.loadURL(VITE_DEV_SERVER_URL);
         win.webContents.openDevTools();
     }
     else {
+        // In production, load the built file
         win.loadFile(path_1.default.join(__dirname, '../dist/index.html'));
     }
 }
@@ -33,28 +40,45 @@ electron_1.app.on('window-all-closed', () => {
         electron_1.app.quit();
     }
 });
-// Your Python bridge IPC handler from before
-// In electron/main.ts
-electron_1.ipcMain.handle('invoke-python', (event, data) => {
+// Python bridge IPC handler for running hello.py
+electron_1.ipcMain.handle('run-python-hello', async () => {
     return new Promise((resolve, reject) => {
-        // Define the path to the script
-        const scriptPath = path_1.default.join(process.cwd(), 'scripts');
-        const scriptName = 'engine.py';
-        // Correctly define the options
+        // Use __dirname to get the current directory of the main.js file
+        // Then navigate to the scripts directory
+        const scriptsDir = path_1.default.join(__dirname, '..', 'scripts');
+        const scriptName = 'hello.py';
+        // Use system Python3 (temporary fix until venv is recreated)
+        const pythonPath = process.platform === 'win32'
+            ? 'python'
+            : 'python3';
         const options = {
-            mode: 'json',
-            pythonPath: path_1.default.join(process.cwd(), '.venv/bin/python'),
-            // The directory of the script is passed as an argument to the python interpreter
-            args: [scriptPath]
+            mode: 'text',
+            pythonPath: pythonPath,
+            scriptPath: scriptsDir,
         };
-        // The first argument to the constructor is the script name.
+        console.log('Attempting to run Python script:', scriptName);
+        console.log('From directory:', scriptsDir);
+        console.log('Using Python at:', pythonPath);
         const shell = new python_shell_1.PythonShell(scriptName, options);
+        let output = [];
+        let errorOutput = [];
         shell.on('message', (message) => {
-            resolve(message);
+            console.log('Python output:', message);
+            output.push(message);
+        });
+        shell.on('stderr', (stderr) => {
+            console.error('Python stderr:', stderr);
+            errorOutput.push(stderr);
+        });
+        shell.on('close', () => {
+            const result = output.length > 0 ? output.join('\n') :
+                errorOutput.length > 0 ? `Error: ${errorOutput.join('\n')}` :
+                    'No output from Python script';
+            resolve(result);
         });
         shell.on('error', (err) => {
+            console.error('Python shell error:', err);
             reject(err);
         });
-        shell.send(data);
     });
 });

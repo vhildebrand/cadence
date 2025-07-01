@@ -7,13 +7,14 @@
   "scripts": {
     "dev": "concurrently -k \"npm:vite\" \"npm:electron:dev\"",
     "vite": "vite",
-    "electron:dev": "npm run electron:build && concurrently -k \"tsc -p tsconfig.electron.json --watch\" \"wait-on ./dist-electron/main.js && electron . --no-sandbox\"",
+    "electron:dev": "npm run electron:build && concurrently -k \"tsc -p tsconfig.electron.json --watch\" \"wait-on ./dist-electron/main.js && NODE_ENV=development ELECTRON_DISABLE_SANDBOX=1 electron . --no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu-sandbox --disable-software-rasterizer --disable-gpu --disable-gpu-compositing --disable-seccomp-filter-sandbox\"",
     "build": "npm run vite:build && npm run electron:build && electron-builder",
     "vite:build": "vite build",
     "electron:build": "tsc -p tsconfig.electron.json && node -e \"require('fs').writeFileSync('dist-electron/package.json', JSON.stringify({ type: 'commonjs' }))\""
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
+    "electron-store": "^10.1.0",
     "python-shell": "^5.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
@@ -25,8 +26,11 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.5.2",
     "concurrently": "^9.2.0",
+    "cross": "^1.0.0",
     "electron": "^37.1.0",
     "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
+    "env": "^0.0.2",
     "eslint": "^9.29.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
