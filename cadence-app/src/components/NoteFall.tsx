@@ -44,6 +44,27 @@ interface NoteFallProps {
   };
 }
 
+interface MusicXMLNote {
+  midi_number: number;
+  start_time_ms: number;
+  duration_ms: number;
+  pitch_name: string;
+  velocity: number;
+  measure: number;
+  note_type: 'tap' | 'hold';
+}
+
+interface MusicXMLData {
+  notes: MusicXMLNote[];
+  metadata: {
+    title?: string;
+    composer?: string;
+    copyright?: string;
+  };
+  tempo: number;
+  total_duration: number;
+}
+
 // Color scheme for notes A-G with neon colors
 const NOTE_COLORS = {
   'C': '#ff4444', // Red
@@ -133,11 +154,15 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
     streak: 0,
     maxStreak: 0
   });
+  const [musicXMLData, setMusicXMLData] = useState<MusicXMLData | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
+  const [gameMode, setGameMode] = useState<'random' | 'musicxml'>('random');
 
   const gameAreaRef = useRef<HTMLDivElement>(null);
   const noteIdCounter = useRef(0);
   const lastNoteSpawn = useRef(0);
-  const gameLoopRef = useRef<number>();
+  const gameLoopRef = useRef<number | null>(null);
   const recentKeyPresses = useRef<MidiPressEvent[]>([]);
   const previousActiveMidiNotes = useRef<Set<number>>(new Set());
   const activeHoldNotes = useRef<Map<number, ActiveHoldNote>>(new Map()); // lane -> active hold note
@@ -186,6 +211,60 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
       holdProgress: 0,
       isActivelyHeld: false
     };
+  }, [GAME_LANES]);
+
+  const spawnedRef = useRef<Set<string>>(new Set());
+
+  const createNoteFromMusicXML = useCallback(
+    (m: MusicXMLNote, origin: number): FallingNote | null => {
+      const lane = noteToLane(m.midi_number);
+      if (lane === -1) return null;
+  
+      return {
+        id: `${m.start_time_ms}-${m.midi_number}`,      // deterministic
+        note: m.midi_number,
+        lane,
+        // enter the playfield exactly FALL_DURATION before its hit-time
+        startTime: origin + m.start_time_ms - FALL_DURATION,
+        isHit: false,
+        isMissed: false,
+        type: m.note_type,
+        duration: m.duration_ms,
+        holdProgress: 0,
+        isActivelyHeld: false
+      };
+    },
+    [noteToLane]
+  );
+  
+
+  // Handle MusicXML file selection
+  const handleSelectMusicXMLFile = useCallback(async () => {
+    try {
+      setIsLoadingFile(true);
+      const result = await window.electronAPI.selectMusicXMLFile();
+      
+      if (result.success && !result.canceled) {
+        setSelectedFile(result.filePath);
+        
+        // Parse the selected file
+        const parseResult = await window.electronAPI.parseMusicXML(result.filePath);
+        
+        if (parseResult.success) {
+          setMusicXMLData(parseResult.data);
+          setGameMode('musicxml');
+          console.log('✅ MusicXML file loaded:', parseResult.data.metadata);
+        } else {
+          console.error('❌ Failed to parse MusicXML:', parseResult.error);
+          alert(`Failed to parse MusicXML file: ${parseResult.error}`);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error selecting MusicXML file:', error);
+      alert(`Error selecting file: ${error}`);
+    } finally {
+      setIsLoadingFile(false);
+    }
   }, []);
 
   // Add hit feedback
@@ -386,7 +465,11 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
       });
 
       if (bestNote && bestTimingDiff <= GOOD_WINDOW) {
-        if (bestNote.type === 'tap') {
+        // `bestNote` is guaranteed not to be null in this branch – create a
+        // narrowed alias to appease TypeScript strict-null checks.
+        const targetNote = bestNote as FallingNote;
+
+        if (targetNote.type === 'tap') {
           // Handle tap notes (immediate hit)
           let hitType: 'perfect' | 'good';
           let points = 0;
@@ -402,7 +485,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
           // Mark note as hit
           setFallingNotes(prev => 
             prev.map(n => 
-              n.id === bestNote!.id 
+              n.id === targetNote.id 
                 ? { ...n, isHit: true }
                 : n
             )
@@ -423,13 +506,13 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
           addHitFeedback(hitType, keyPress.lane);
           console.log(`🎯 TAP ${hitType.toUpperCase()}! Note: ${GAME_LANES[keyPress.lane].name}, Distance: ${bestTimingDiff.toFixed(1)}ms, Points: ${points}, Combo: ${combo + 1}`);
           
-        } else if (bestNote.type === 'hold') {
+        } else if (targetNote.type === 'hold') {
           // Handle hold notes (start tracking the hold)
           if (!activeHoldNotes.current.has(keyPress.lane)) {
             // Determine timing quality based on how close to ideal the start was
             // Use more granular timing for hold notes to provide better feedback
             let startTimingQuality: 'perfect' | 'good' | 'late';
-            const extendedGoodWindow = GOOD_WINDOW + (bestNote.duration * 0.1);
+            const extendedGoodWindow = GOOD_WINDOW + (targetNote.duration * 0.1);
             
             if (bestTimingDiff <= PERFECT_WINDOW) {
               startTimingQuality = 'perfect';
@@ -442,15 +525,15 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
             }
             
             const holdNote: ActiveHoldNote = {
-              noteId: bestNote.id,
+              noteId: targetNote.id,
               startTime: keyPress.timestamp,
-              expectedDuration: bestNote.duration,
+              expectedDuration: targetNote.duration,
               lane: keyPress.lane,
               startTimingQuality: startTimingQuality
             };
             
             activeHoldNotes.current.set(keyPress.lane, holdNote);
-            console.log(`🎵 HOLD STARTED (${startTimingQuality.toUpperCase()})! Note: ${GAME_LANES[keyPress.lane].name}, Expected duration: ${bestNote.duration}ms`);
+            console.log(`🎵 HOLD STARTED (${startTimingQuality.toUpperCase()})! Note: ${GAME_LANES[keyPress.lane].name}, Expected duration: ${targetNote.duration}ms`);
           }
         }
         
@@ -468,11 +551,45 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
 
     const gameLoop = () => {
       const currentTime = Date.now();
+      const gameStartTime = gameStartRef.current;      // constant for this run
+      const elapsed = currentTime - gameStartTime;
 
-      // Spawn new notes (slightly less frequent due to more lanes)
-      if (currentTime - lastNoteSpawn.current > 600 + Math.random() * 400) { // Random interval between 600-1000ms
-        setFallingNotes(prev => [...prev, generateRandomNote()]);
-        lastNoteSpawn.current = currentTime;
+      // ------------------------------------------------------------------
+      // MUSICXML MODE – spawn notes just-in-time
+      // ------------------------------------------------------------------
+      if (gameMode === 'musicxml' && musicXMLData) {
+        const tolerance = 30; // ms – small allowance for frame-timing jitter
+
+        const upcoming = musicXMLData.notes.filter((n) => {
+          // Absolute world-time (ms since epoch) at which this note should
+          // *enter* the play-field (i.e. FALL_DURATION ms before its hit time).
+          const spawnTime = gameStartTime + n.start_time_ms - FALL_DURATION;
+
+          return (
+            spawnTime <= currentTime + tolerance &&
+            !spawnedRef.current.has(`${n.start_time_ms}-${n.midi_number}`)
+          );
+        });
+
+        if (upcoming.length) {
+          const fresh = upcoming
+            .map((n) => createNoteFromMusicXML(n, gameStartTime))
+            .filter((x): x is FallingNote => x !== null);
+
+          if (fresh.length) {
+            setFallingNotes((prev) => [...prev, ...fresh]);
+            fresh.forEach((n) => spawnedRef.current.add(n.id));
+          }
+        }
+      }
+
+      // Spawn new notes based on game mode
+      if (gameMode === 'random') {
+        // Random mode: spawn notes at random intervals
+        if (currentTime - lastNoteSpawn.current > 600 + Math.random() * 400) {
+          setFallingNotes((prev) => [...prev, generateRandomNote()]);
+          lastNoteSpawn.current = currentTime;
+        }
       }
 
       // Update falling notes and check for misses
@@ -555,9 +672,12 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-  }, [isPlaying, generateRandomNote, addHitFeedback, calculateNotePosition]);
+  }, [isPlaying, generateRandomNote, addHitFeedback, calculateNotePosition, gameMode, musicXMLData, createNoteFromMusicXML, fallingNotes, GAME_LANES]);
+
+  const gameStartRef = useRef<number>(0);
 
   const startGame = () => {
+    gameStartRef.current = Date.now();   // <-- NEW
     setIsPlaying(true);
     setScore(0);
     setCombo(0);
@@ -593,9 +713,22 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
       <div className="notefall-header">
         <h2>🎸 Cadence Note Fall</h2>
         <div className="game-controls">
+          <button 
+            onClick={handleSelectMusicXMLFile} 
+            disabled={isLoadingFile}
+            className="button secondary"
+          >
+            {isLoadingFile ? 'Loading...' : 'Load MusicXML'}
+          </button>
+          <button 
+            onClick={() => setGameMode('random')} 
+            className={`button ${gameMode === 'random' ? 'primary' : 'secondary'}`}
+          >
+            Random Mode
+          </button>
           {!isPlaying ? (
             <button onClick={startGame} className="button primary">
-              Start Game
+              {gameMode === 'musicxml' && musicXMLData ? 'Play Song' : 'Start Game'}
             </button>
           ) : (
             <button onClick={stopGame} className="button secondary">
@@ -608,7 +741,35 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
         </div>
       </div>
 
-
+      {/* File Status Display */}
+      {gameMode === 'musicxml' && (
+        <div className="game-stats">
+          <div className="stat">
+            <span className="stat-label">Mode</span>
+            <span className="stat-value">MusicXML</span>
+          </div>
+          {musicXMLData && (
+            <>
+              <div className="stat">
+                <span className="stat-label">Title</span>
+                <span className="stat-value">{musicXMLData.metadata.title || 'Unknown'}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Composer</span>
+                <span className="stat-value">{musicXMLData.metadata.composer || 'Unknown'}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Tempo</span>
+                <span className="stat-value">{musicXMLData.tempo} BPM</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Notes</span>
+                <span className="stat-value">{musicXMLData.notes.length}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div 
         className="game-area" 

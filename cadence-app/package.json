@@ -17,7 +17,8 @@
     "electron-store": "^10.1.0",
     "python-shell": "^5.0.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "rest": "^2.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
 import { PythonShell } from 'python-shell';
 
@@ -39,6 +39,111 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// File dialog IPC handler for selecting MusicXML files
+ipcMain.handle('select-musicxml-file', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select MusicXML File',
+    filters: [
+      { name: 'MusicXML Files', extensions: ['xml', 'musicxml', 'mxl'] },
+      { name: 'All Files', extensions: ['*'] }
+    ],
+    properties: ['openFile']
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return { success: false, canceled: true };
+  }
+
+  return { 
+    success: true, 
+    canceled: false, 
+    filePath: result.filePaths[0] 
+  };
+});
+
+// MusicXML parsing IPC handler
+ipcMain.handle('parse-musicxml', async (event, filePath: string) => {
+  return new Promise((resolve, reject) => {
+    const scriptsDir = path.join(__dirname, '..', 'scripts');
+    const scriptName = 'musicxml_parser.py';
+    
+    // Use system Python3
+    const pythonPath = process.platform === 'win32' 
+      ? 'python'
+      : 'python3';
+    
+    const options = {
+      mode: 'text' as const,
+      pythonPath: pythonPath,
+      scriptPath: scriptsDir,
+      args: ['game_notes', filePath],
+    };
+
+    console.log('Parsing MusicXML file:', filePath);
+    console.log('Using script:', scriptName);
+    console.log('From directory:', scriptsDir);
+
+    const shell = new PythonShell(scriptName, options);
+    let output: string[] = [];
+    let errorOutput: string[] = [];
+
+    shell.on('message', (message) => {
+      console.log('MusicXML Parser output:', message);
+      output.push(message);
+    });
+
+    shell.on('stderr', (stderr) => {
+      console.error('MusicXML Parser stderr:', stderr);
+      errorOutput.push(stderr);
+    });
+
+    shell.on('close', () => {
+      if (output.length > 0) {
+        try {
+          // Try to parse the JSON output
+          const fullOutput = output.join('\n');
+          const parsedResult = JSON.parse(fullOutput);
+          
+          if (parsedResult.error) {
+            resolve({ 
+              success: false, 
+              error: parsedResult.error 
+            });
+          } else {
+            resolve({ 
+              success: true, 
+              data: parsedResult 
+            });
+          }
+        } catch (parseError) {
+          resolve({ 
+            success: false, 
+            error: `Failed to parse Python output: ${parseError}` 
+          });
+        }
+      } else if (errorOutput.length > 0) {
+        resolve({ 
+          success: false, 
+          error: `MusicXML parsing error: ${errorOutput.join('\n')}` 
+        });
+      } else {
+        resolve({ 
+          success: false, 
+          error: 'No output from MusicXML parser' 
+        });
+      }
+    });
+
+    shell.on('error', (err) => {
+      console.error('MusicXML Parser shell error:', err);
+      resolve({ 
+        success: false, 
+        error: `Python shell error: ${err.message}` 
+      });
+    });
+  });
 });
 
 // Python bridge IPC handler for running hello.py
