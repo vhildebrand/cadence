@@ -495,12 +495,17 @@ export default function NoteFall({ activeMidiNotes }: NoteFallProps) {
           if (note.type === 'tap') {
             notePassedHitZone = noteTopPosition > HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT;
           } else if (note.type === 'hold') {
-            // For hold notes, use the same pixel-based logic as tap notes for consistency
-            // Miss when the bottom of the note has passed beyond the hit zone with tolerance
+            // For hold notes, only mark as missed if:
+            // 1. The note has passed the hit zone AND
+            // 2. The player is NOT actively holding the note
             const noteHeight = (note.duration / FALL_DURATION) * NOTES_CONTAINER_HEIGHT;
             const noteBottomPosition = noteTopPosition + noteHeight;
-            const tolerance = 30; // Same tolerance as in the timing logic
-            notePassedHitZone = noteBottomPosition > HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT + tolerance;
+            const tolerance = 50; // More generous tolerance for hold notes
+            const hasPassedHitZone = noteBottomPosition > HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT + tolerance;
+            const isActivelyHeld = activeHoldNotes.current.has(note.lane);
+            
+            // Only mark as missed if passed hit zone AND not being actively held
+            notePassedHitZone = hasPassedHitZone && !isActivelyHeld;
           }
           
           if (notePassedHitZone && !updatedNote.isHit && !updatedNote.isMissed) {
