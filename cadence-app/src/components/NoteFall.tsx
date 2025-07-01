@@ -73,7 +73,11 @@ const GAME_LANES = (() => {
 })();
 
 const FALL_DURATION = 4000; // 4 seconds for note to fall
-const HIT_ZONE_POSITION = 85; // Percentage down the screen where hit zone is
+const PIANO_HEIGHT = 80; // Height of piano keyboard in pixels
+const HIT_ZONE_HEIGHT = 50; // Height of hit zone in pixels
+const GAME_AREA_HEIGHT = 600; // Total game area height
+const NOTES_CONTAINER_HEIGHT = GAME_AREA_HEIGHT - PIANO_HEIGHT - 100; // Available height for falling notes
+const HIT_ZONE_POSITION_PX = NOTES_CONTAINER_HEIGHT - HIT_ZONE_HEIGHT; // Pixel position within notes container
 const PERFECT_WINDOW = 100; // Perfect timing window in ms
 const GOOD_WINDOW = 200; // Good timing window in ms
 
@@ -101,6 +105,13 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
   // Convert MIDI note to lane index
   const noteToLane = useCallback((note: number): number => {
     return GAME_LANES.findIndex(lane => lane.note === note);
+  }, []);
+
+  // Calculate note position in pixels within the notes container
+  const calculateNotePosition = useCallback((startTime: number, currentTime: number): number => {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(1, elapsed / FALL_DURATION);
+    return progress * NOTES_CONTAINER_HEIGHT;
   }, []);
 
   // Generate a random note within C4-C6 range
@@ -171,8 +182,6 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
   useEffect(() => {
     if (!isPlaying || recentKeyPresses.current.length === 0) return;
 
-    const currentTime = Date.now();
-
     // Check each recent key press against falling notes
     recentKeyPresses.current.forEach(keyPress => {
       // Find notes in this lane that could be hit
@@ -189,12 +198,14 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       let bestTimingDiff = Infinity;
 
       hitTargets.forEach(note => {
-        // Calculate where the note was when the key was pressed
-        const noteProgressAtPress = ((keyPress.timestamp - note.startTime) / FALL_DURATION) * 100;
-        const timingDiff = Math.abs(noteProgressAtPress - HIT_ZONE_POSITION);
+        // Calculate where the note was (in pixels) when the key was pressed
+        const notePositionAtPress = calculateNotePosition(note.startTime, keyPress.timestamp);
         
-        // Convert position difference to milliseconds
-        const timingDiffMs = (timingDiff / 100) * FALL_DURATION;
+        // Distance from hit zone center (in pixels)
+        const distanceFromHitZone = Math.abs(notePositionAtPress - HIT_ZONE_POSITION_PX);
+        
+        // Convert pixel distance to timing difference (approximate)
+        const timingDiffMs = (distanceFromHitZone / NOTES_CONTAINER_HEIGHT) * FALL_DURATION;
         
         if (timingDiffMs < bestTimingDiff) {
           bestNote = note;
@@ -237,7 +248,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
         // Add visual feedback
         addHitFeedback(hitType, keyPress.lane);
 
-        console.log(`🎯 ${hitType.toUpperCase()}! Note: ${GAME_LANES[keyPress.lane].name}, Timing: ${bestTimingDiff.toFixed(1)}ms, Points: ${points}, Combo: ${combo + 1}`);
+        console.log(`🎯 ${hitType.toUpperCase()}! Note: ${GAME_LANES[keyPress.lane].name}, Distance: ${bestTimingDiff.toFixed(1)}ms, Points: ${points}, Combo: ${combo + 1}`);
         
         // Remove this key press so it doesn't trigger multiple hits
         recentKeyPresses.current = recentKeyPresses.current.filter(
@@ -245,7 +256,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
         );
       }
     });
-  }, [fallingNotes, isPlaying, combo, addHitFeedback]);
+  }, [fallingNotes, isPlaying, combo, addHitFeedback, calculateNotePosition]);
 
   // Game loop
   useEffect(() => {
@@ -263,10 +274,10 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
       // Update falling notes and check for misses
       setFallingNotes(prev => 
         prev.map(note => {
-          const notePosition = ((currentTime - note.startTime) / FALL_DURATION) * 100;
+          const notePosition = calculateNotePosition(note.startTime, currentTime);
           
           // Check if note has passed the hit zone without being hit
-          if (notePosition > HIT_ZONE_POSITION + 10 && !note.isHit && !note.isMissed) {
+          if (notePosition > HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT && !note.isHit && !note.isMissed) {
             // Miss!
             setCombo(0);
             setGameStats(prevStats => ({
@@ -282,8 +293,8 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
           return note;
         }).filter(note => {
           // Remove notes that are off-screen
-          const notePosition = ((currentTime - note.startTime) / FALL_DURATION) * 100;
-          return notePosition < 110; // Keep for a bit after they pass
+          const notePosition = calculateNotePosition(note.startTime, currentTime);
+          return notePosition < NOTES_CONTAINER_HEIGHT + 50; // Keep for a bit after they pass
         })
       );
 
@@ -297,7 +308,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-  }, [isPlaying, generateRandomNote, addHitFeedback]);
+  }, [isPlaying, generateRandomNote, addHitFeedback, calculateNotePosition]);
 
   const startGame = () => {
     setIsPlaying(true);
@@ -394,7 +405,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
         <div className="notes-container">
           {fallingNotes.map(note => {
             const currentTime = Date.now();
-            const progress = Math.min(100, ((currentTime - note.startTime) / FALL_DURATION) * 100);
+            const notePositionPx = calculateNotePosition(note.startTime, currentTime);
             const lane = GAME_LANES[note.lane];
             
             return (
@@ -403,8 +414,8 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
                 className={`falling-note ${lane.isBlackKey ? 'black-note' : 'white-note'} ${note.isHit ? 'hit' : ''} ${note.isMissed ? 'missed' : ''}`}
                 style={{
                   '--lane-index': note.lane,
-                  '--progress': `${progress}%`,
                   '--note-color': lane.color,
+                  top: `${notePositionPx}px`,
                 } as React.CSSProperties}
               >
                 <div className="note-inner">
@@ -416,7 +427,7 @@ export default function NoteFall({ onMidiMessage, activeMidiNotes }: NoteFallPro
         </div>
 
         {/* Hit Zone */}
-        <div className="hit-zone" style={{ top: `${HIT_ZONE_POSITION}%` }}>
+        <div className="hit-zone" style={{ top: `${PIANO_HEIGHT + HIT_ZONE_POSITION_PX}px` }}>
           {GAME_LANES.map((lane, index) => (
             <div 
               key={index} 

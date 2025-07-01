@@ -224,7 +224,7 @@
   height: 35px;
   border-radius: 8px;
   left: calc(var(--lane-index) * (100% / 24) + 1px);
-  top: var(--progress);
+  /* Note: top is now set via inline style in pixels */
   transition: none;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
   border: 2px solid rgba(255, 255, 255, 0.4);
@@ -293,7 +293,7 @@
   backdrop-filter: blur(2px);
 }
 
-/* Hit Zone - positioned at 85% down */
+/* Hit Zone - positioned via inline style in pixels */
 .hit-zone {
   position: absolute;
   left: 0;
