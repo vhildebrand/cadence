@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 
 // Define the MIDI message type
@@ -12,15 +10,35 @@ interface MidiMessage {
   timestamp: number;
 }
 
+// Define the drill state type
+interface DrillState {
+  isActive: boolean;
+  currentPrompt: string | null;
+  expectedNotes: number[];
+  userAnswer: number[];
+  feedback: string | null;
+  score: number;
+  streak: number;
+}
+
 function App() {
-  const [count, setCount] = useState(0)
-  const [pythonResult, setPythonResult] = useState<string>('')
-  const [isRunningPython, setIsRunningPython] = useState(false)
   const [midiMessage, setMidiMessage] = useState<MidiMessage | null>(null)
   const [midiHistory, setMidiHistory] = useState<MidiMessage[]>([])
   const [midiAccess, setMidiAccess] = useState<any>(null);
   const [midiStatus, setMidiStatus] = useState<string>('Not connected');
   const [connectedDevices, setConnectedDevices] = useState<string[]>([]);
+  
+  // Drill state
+  const [drillState, setDrillState] = useState<DrillState>({
+    isActive: false,
+    currentPrompt: null,
+    expectedNotes: [],
+    userAnswer: [],
+    feedback: null,
+    score: 0,
+    streak: 0
+  });
+  const [isRunningDrill, setIsRunningDrill] = useState(false);
 
   // Initialize Web MIDI API
   useEffect(() => {
@@ -111,23 +129,93 @@ function App() {
         const newHistory = [midiMessage, ...prev];
         return newHistory.slice(0, 10);
       });
+
+      // If drill is active and this is a note on, add to user answer
+      if (drillState.isActive && isNoteOn) {
+        setDrillState(prev => ({
+          ...prev,
+          userAnswer: [...prev.userAnswer, noteNumber]
+        }));
+      }
     }
   };
 
-  const runPythonScript = async () => {
-    setIsRunningPython(true)
-    setPythonResult('')
+  const startIntervalDrill = async () => {
+    setIsRunningDrill(true);
     
     try {
-      // Use the electron API to run Python script via IPC
-      const result = await (window as any).electronAPI.runPythonHello()
-      setPythonResult(result)
+      // Call the LangGraph script to start a drill
+      const result = await (window as any).electronAPI.runCadenceGraph('start_drill');
+      const drillData = JSON.parse(result);
+      
+      setDrillState({
+        isActive: true,
+        currentPrompt: drillData.prompt,
+        expectedNotes: drillData.expected_notes,
+        userAnswer: [],
+        feedback: null,
+        score: drillData.score || 0,
+        streak: drillData.streak || 0
+      });
+      
     } catch (error) {
-      setPythonResult(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('Error starting drill:', error);
+      setDrillState(prev => ({
+        ...prev,
+        feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }));
     } finally {
-      setIsRunningPython(false)
+      setIsRunningDrill(false);
     }
-  }
+  };
+
+  const evaluateAnswer = async () => {
+    if (!drillState.isActive || drillState.userAnswer.length === 0) return;
+    
+    setIsRunningDrill(true);
+    
+    try {
+      // Send user answer to LangGraph for evaluation
+      const evaluationData = {
+        expected_notes: drillState.expectedNotes,
+        user_answer: drillState.userAnswer,
+        current_score: drillState.score,
+        current_streak: drillState.streak
+      };
+      
+      const result = await (window as any).electronAPI.runCadenceGraph('evaluate_answer', JSON.stringify(evaluationData));
+      const evaluation = JSON.parse(result);
+      
+      setDrillState(prev => ({
+        ...prev,
+        feedback: evaluation.feedback,
+        score: evaluation.score,
+        streak: evaluation.streak,
+        isActive: false // End current drill
+      }));
+      
+    } catch (error) {
+      console.error('Error evaluating answer:', error);
+      setDrillState(prev => ({
+        ...prev,
+        feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }));
+    } finally {
+      setIsRunningDrill(false);
+    }
+  };
+
+  const resetDrill = () => {
+    setDrillState({
+      isActive: false,
+      currentPrompt: null,
+      expectedNotes: [],
+      userAnswer: [],
+      feedback: null,
+      score: 0,
+      streak: 0
+    });
+  };
 
   // Helper function to convert MIDI note number to note name
   const noteNumberToName = (noteNumber: number): string => {
@@ -144,176 +232,162 @@ function App() {
   };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Cadence - MIDI Ear Trainer</h1>
-      
-      {/* MIDI Input Section */}
-      <div className="card">
-        <h2>MIDI Input</h2>
-        
-        {/* MIDI Status */}
-        <div style={{ 
-          padding: '0.5rem', 
-          backgroundColor: connectedDevices.length > 0 ? '#1a4d1a' : '#4d1a1a', 
-          borderRadius: '4px',
-          marginBottom: '1rem',
-          fontSize: '0.9em'
-        }}>
-          <strong>Status:</strong> {midiStatus}
-        </div>
-        
-        {/* Connected Devices */}
-        {connectedDevices.length > 0 && (
-          <div style={{ marginBottom: '1rem' }}>
-            <strong>Connected Devices:</strong>
-            <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem' }}>
-              {connectedDevices.map((device, index) => (
-                <li key={index} style={{ fontSize: '0.9em', color: '#4caf50' }}>
-                  {device}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        
-        {/* Refresh Button */}
-        <button 
-          onClick={refreshMIDI}
-          style={{ 
-            marginBottom: '1rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: '#646cff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Refresh MIDI Devices
-        </button>
-        
-        {/* Current MIDI Message */}
-        {midiMessage ? (
-          <div style={{ 
-            padding: '1rem', 
-            backgroundColor: midiMessage.type === 'noteOn' ? '#2d5016' : '#1a1a1a', 
-            borderRadius: '8px',
-            border: '2px solid ' + (midiMessage.type === 'noteOn' ? '#4caf50' : '#666'),
-            marginBottom: '1rem'
-          }}>
-            <h3 style={{ 
-              color: midiMessage.type === 'noteOn' ? '#4caf50' : '#ff6b6b',
-              margin: '0 0 0.5rem 0'
-            }}>
-              {midiMessage.type === 'noteOn' ? '🎹 Note On' : '🔇 Note Off'}
-            </h3>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-              Note: {noteNumberToName(midiMessage.note)} (#{midiMessage.note})
-            </div>
-            <div>Velocity: {midiMessage.velocity}</div>
-            <div>Channel: {midiMessage.channel + 1}</div>
-            <div style={{ fontSize: '0.8em', color: '#888' }}>
-              Time: {new Date(midiMessage.timestamp).toLocaleTimeString()}
+    <div className="app">
+      <header className="app-header">
+        <h1>🎹 Cadence</h1>
+        <p className="subtitle">Intelligent MIDI Ear Trainer</p>
+      </header>
+
+      <main className="app-main">
+        {/* MIDI Connection Status */}
+        <section className="section">
+          <h2>MIDI Connection</h2>
+          <div className={`status-indicator ${connectedDevices.length > 0 ? 'connected' : 'disconnected'}`}>
+            <div className="status-text">
+              <strong>Status:</strong> {midiStatus}
             </div>
           </div>
-        ) : (
-          <div style={{ 
-            padding: '1rem', 
-            backgroundColor: '#1a1a1a', 
-            borderRadius: '8px',
-            border: '1px dashed #666',
-            marginBottom: '1rem',
-            color: '#888'
-          }}>
-            <p>🎹 Connect a MIDI keyboard and play a note to see it here!</p>
-            <p style={{ fontSize: '0.8em', margin: '0.5rem 0 0 0' }}>
-              Make sure to allow MIDI access when prompted by your browser.
-            </p>
+          
+          {connectedDevices.length > 0 && (
+            <div className="connected-devices">
+              <strong>Connected Devices:</strong>
+              <ul>
+                {connectedDevices.map((device, index) => (
+                  <li key={index}>{device}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          <button onClick={refreshMIDI} className="button secondary">
+            Refresh MIDI Devices
+          </button>
+        </section>
+
+        {/* Interval Drill Section */}
+        <section className="section">
+          <h2>Interval Drill</h2>
+          
+          <div className="drill-stats">
+            <div className="stat">
+              <span className="stat-label">Score:</span>
+              <span className="stat-value">{drillState.score}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Streak:</span>
+              <span className="stat-value">{drillState.streak}</span>
+            </div>
           </div>
-        )}
-        
-        {/* MIDI History */}
-        {midiHistory.length > 0 && (
-          <div style={{ marginTop: '1rem' }}>
-            <h3>Recent MIDI Messages:</h3>
-            <div style={{ 
-              maxHeight: '200px', 
-              overflowY: 'auto', 
-              backgroundColor: '#1a1a1a', 
-              borderRadius: '8px',
-              border: '1px solid #333',
-              padding: '0.5rem'
-            }}>
-              {midiHistory.map((msg, index) => (
-                <div key={`${msg.timestamp}-${index}`} style={{ 
-                  fontSize: '0.9em', 
-                  padding: '0.25rem', 
-                  borderBottom: index < midiHistory.length - 1 ? '1px solid #333' : 'none',
-                  color: msg.type === 'noteOn' ? '#4caf50' : '#ff6b6b'
-                }}>
-                  {msg.type === 'noteOn' ? '▶' : '⏹'} {noteNumberToName(msg.note)} (vel: {msg.velocity})
+
+          {!drillState.isActive ? (
+            <div className="drill-controls">
+              <button 
+                onClick={startIntervalDrill} 
+                disabled={isRunningDrill || connectedDevices.length === 0}
+                className="button primary large"
+              >
+                {isRunningDrill ? 'Starting Drill...' : 'Start Interval Drill'}
+              </button>
+              {connectedDevices.length === 0 && (
+                <p className="warning">Connect a MIDI keyboard to start practicing</p>
+              )}
+            </div>
+          ) : (
+            <div className="drill-active">
+              <div className="prompt">
+                <h3>Challenge:</h3>
+                <p>{drillState.currentPrompt}</p>
+              </div>
+              
+              <div className="expected-notes">
+                <strong>Expected Notes:</strong>
+                <div className="note-list">
+                  {drillState.expectedNotes.map((note, index) => (
+                    <span key={index} className="note-chip">
+                      {noteNumberToName(note)}
+                    </span>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              <div className="user-answer">
+                <strong>Your Answer:</strong>
+                <div className="note-list">
+                  {drillState.userAnswer.length > 0 ? (
+                    drillState.userAnswer.map((note, index) => (
+                      <span key={index} className="note-chip user">
+                        {noteNumberToName(note)}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="placeholder">Play the notes on your keyboard...</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="drill-controls">
+                <button 
+                  onClick={evaluateAnswer} 
+                  disabled={isRunningDrill || drillState.userAnswer.length === 0}
+                  className="button primary"
+                >
+                  {isRunningDrill ? 'Evaluating...' : 'Submit Answer'}
+                </button>
+                <button onClick={resetDrill} className="button secondary">
+                  Reset
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-      
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      
-      {/* Python Integration Section */}
-      <div className="card">
-        <h2>Python Integration</h2>
-        <button 
-          onClick={runPythonScript}
-          disabled={isRunningPython}
-          style={{ 
-            backgroundColor: isRunningPython ? '#666' : '#646cff',
-            cursor: isRunningPython ? 'not-allowed' : 'pointer'
-          }}
-        >
-          {isRunningPython ? 'Running Python...' : 'Run Python Script'}
-        </button>
-        
-        {pythonResult && (
-          <div style={{ 
-            marginTop: '1rem', 
-            padding: '1rem', 
-            backgroundColor: '#1a1a1a', 
-            borderRadius: '8px',
-            border: '1px solid #333'
-          }}>
-            <h3>Python Output:</h3>
-            <pre style={{ 
-              whiteSpace: 'pre-wrap', 
-              wordBreak: 'break-word',
-              color: '#00ff00'
-            }}>
-              {pythonResult}
-            </pre>
-          </div>
-        )}
-      </div>
-      
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+          )}
+
+          {drillState.feedback && (
+            <div className="feedback">
+              <h3>Feedback:</h3>
+              <p>{drillState.feedback}</p>
+            </div>
+          )}
+        </section>
+
+        {/* Current MIDI Input Display */}
+        <section className="section">
+          <h2>Live MIDI Input</h2>
+          
+          {midiMessage ? (
+            <div className={`midi-message ${midiMessage.type}`}>
+              <div className="midi-note">
+                <span className="note-name">{noteNumberToName(midiMessage.note)}</span>
+                <span className="note-number">#{midiMessage.note}</span>
+              </div>
+              <div className="midi-details">
+                <div>Velocity: {midiMessage.velocity}</div>
+                <div>Channel: {midiMessage.channel + 1}</div>
+                <div className="timestamp">
+                  {new Date(midiMessage.timestamp).toLocaleTimeString()}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="midi-placeholder">
+              <p>🎹 Connect a MIDI keyboard and play a note to see it here!</p>
+            </div>
+          )}
+          
+          {midiHistory.length > 0 && (
+            <details className="midi-history">
+              <summary>Recent MIDI Messages ({midiHistory.length})</summary>
+              <div className="history-list">
+                {midiHistory.map((msg, index) => (
+                  <div key={`${msg.timestamp}-${index}`} className={`history-item ${msg.type}`}>
+                    <span className="note">{noteNumberToName(msg.note)}</span>
+                    <span className="velocity">vel: {msg.velocity}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
+      </main>
+    </div>
   )
 }
 
