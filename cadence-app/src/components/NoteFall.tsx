@@ -108,7 +108,15 @@ const generateGameLanes = (startOctave: number = 4, endOctave: number = 6) => {
   return notes;
 };
 
-const FALL_DURATION = 6000; // 6 seconds for note to fall (increased for better visibility)
+// --- Gameplay constants -----------------------------------------------------
+// Delay (ms) between hitting "Play" and the first notes appearing.  Gives the
+// player time to prepare and guarantees that initial notes spawn at the top of
+// the play-field instead of mid-fall.
+const SONG_START_DELAY_MS = 8000;
+
+// Default time (ms) a note spends falling from the very top to the hit-zone.
+const DEFAULT_FALL_DURATION = 6000;
+
 const PERFECT_WINDOW = 100; // Perfect timing window in ms
 const GOOD_WINDOW = 200; // Good timing window in ms
 
@@ -154,6 +162,8 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
     streak: 0,
     maxStreak: 0
   });
+  // Fall duration is now stateful so tempo/speed can be tweaked mid-game.
+  const [fallDuration, setFallDuration] = useState<number>(DEFAULT_FALL_DURATION);
   const [musicXMLData, setMusicXMLData] = useState<MusicXMLData | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
@@ -182,10 +192,10 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
   // Calculate note position in pixels within the notes container
   const calculateNotePosition = useCallback((startTime: number, currentTime: number): number => {
     const elapsed = currentTime - startTime;
-    const progress = Math.min(1, elapsed / FALL_DURATION);
+    const progress = Math.min(1, elapsed / fallDuration);
     const { NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
     return progress * NOTES_CONTAINER_HEIGHT;
-  }, []);
+  }, [fallDuration]);
 
   // Generate a random note within C4-C6 range
   const generateRandomNote = useCallback((): FallingNote => {
@@ -211,7 +221,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
       holdProgress: 0,
       isActivelyHeld: false
     };
-  }, [GAME_LANES]);
+  }, []);
 
   const spawnedRef = useRef<Set<string>>(new Set());
 
@@ -224,8 +234,10 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
         id: `${m.start_time_ms}-${m.midi_number}`,      // deterministic
         note: m.midi_number,
         lane,
-        // enter the playfield exactly FALL_DURATION before its hit-time
-        startTime: origin + m.start_time_ms - FALL_DURATION,
+        // enter the play-field exactly `fallDuration` ms before hit-time, plus
+        // a global SONG_START_DELAY_MS so that the very first notes spawn only
+        // after the countdown has finished.
+        startTime: origin + SONG_START_DELAY_MS + m.start_time_ms - fallDuration,
         isHit: false,
         isMissed: false,
         type: m.note_type,
@@ -234,7 +246,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
         isActivelyHeld: false
       };
     },
-    [noteToLane]
+    [noteToLane, fallDuration]
   );
   
 
@@ -421,7 +433,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
           const notePositionAtPress = calculateNotePosition(note.startTime, keyPress.timestamp);
           const { HIT_ZONE_POSITION_PX, NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
           const distanceFromHitZone = Math.abs(notePositionAtPress - HIT_ZONE_POSITION_PX);
-          const timingDiffMs = (distanceFromHitZone / NOTES_CONTAINER_HEIGHT) * FALL_DURATION;
+          const timingDiffMs = (distanceFromHitZone / NOTES_CONTAINER_HEIGHT) * fallDuration;
           
           if (timingDiffMs < bestTimingDiff) {
             bestNote = note;
@@ -430,7 +442,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
         } else if (note.type === 'hold') {
           // For hold notes, use pixel-based timing similar to tap notes
           const noteTopPosition = calculateNotePosition(note.startTime, keyPress.timestamp);
-          const noteHeight = (note.duration / FALL_DURATION) * getDynamicDimensions(gameAreaRef).NOTES_CONTAINER_HEIGHT;
+          const noteHeight = (note.duration / fallDuration) * getDynamicDimensions(gameAreaRef).NOTES_CONTAINER_HEIGHT;
           const noteBottomPosition = noteTopPosition + noteHeight;
           
           const { HIT_ZONE_POSITION_PX, HIT_ZONE_HEIGHT, NOTES_CONTAINER_HEIGHT } = getDynamicDimensions(gameAreaRef);
@@ -449,7 +461,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
           
           if (noteInOrNearHitZone) {
             // Calculate timing diff based on bottom position (ideal start point)
-            const timingDiffMs = (bottomDistanceFromIdeal / NOTES_CONTAINER_HEIGHT) * FALL_DURATION;
+            const timingDiffMs = (bottomDistanceFromIdeal / NOTES_CONTAINER_HEIGHT) * fallDuration;
             
             // Extend timing window for hold notes to account for their length
             const extendedGoodWindow = GOOD_WINDOW + (note.duration * 0.1); // Add 10% of note duration to timing window
@@ -563,7 +575,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
         const upcoming = musicXMLData.notes.filter((n) => {
           // Absolute world-time (ms since epoch) at which this note should
           // *enter* the play-field (i.e. FALL_DURATION ms before its hit time).
-          const spawnTime = gameStartTime + n.start_time_ms - FALL_DURATION;
+          const spawnTime = gameStartTime + SONG_START_DELAY_MS + n.start_time_ms - fallDuration;
 
           return (
             spawnTime <= currentTime + tolerance &&
@@ -608,7 +620,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
               const progress = Math.min(1, holdDuration / holdNote.expectedDuration);
               
               // Check if the note is currently in the correct position for holding
-              const noteHeight = (note.duration / FALL_DURATION) * NOTES_CONTAINER_HEIGHT;
+              const noteHeight = (note.duration / fallDuration) * getDynamicDimensions(gameAreaRef).NOTES_CONTAINER_HEIGHT;
               const noteBottomPosition = noteTopPosition + noteHeight;
               const isInHitZone = noteBottomPosition >= HIT_ZONE_POSITION_PX && 
                                  noteTopPosition <= HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT;
@@ -625,7 +637,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
             // For hold notes, only mark as missed if:
             // 1. The note has passed the hit zone AND
             // 2. The player is NOT actively holding the note
-            const noteHeight = (note.duration / FALL_DURATION) * NOTES_CONTAINER_HEIGHT;
+            const noteHeight = (note.duration / fallDuration) * getDynamicDimensions(gameAreaRef).NOTES_CONTAINER_HEIGHT;
             const noteBottomPosition = noteTopPosition + noteHeight;
             const tolerance = 50; // More generous tolerance for hold notes
             const hasPassedHitZone = noteBottomPosition > HIT_ZONE_POSITION_PX + HIT_ZONE_HEIGHT + tolerance;
@@ -738,6 +750,18 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
           <button onClick={resetGame} className="button secondary">
             Reset
           </button>
+          {/* Tempo / fall-speed control */}
+          <label className="tempo-slider">
+            Fall&nbsp;Time&nbsp;{(fallDuration / 1000).toFixed(1)} s
+            <input
+              type="range"
+              min={2000}
+              max={10000}
+              step={500}
+              value={fallDuration}
+              onChange={(e) => setFallDuration(Number(e.target.value))}
+            />
+          </label>
         </div>
       </div>
 
@@ -802,7 +826,7 @@ export default function NoteFall({ activeMidiNotes, noteRange }: NoteFallProps) 
             let noteHeight = 45; // Default tap note height
             if (note.type === 'hold') {
               // Convert duration to pixels using same scale as falling speed
-              const durationInPixels = (note.duration / FALL_DURATION) * NOTES_CONTAINER_HEIGHT;
+              const durationInPixels = (note.duration / fallDuration) * NOTES_CONTAINER_HEIGHT;
               noteHeight = Math.max(45, Math.min(200, durationInPixels)); // Min 45px, max 200px
             }
             
