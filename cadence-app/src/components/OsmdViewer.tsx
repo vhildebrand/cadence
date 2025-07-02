@@ -30,7 +30,6 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
   ({ musicXml, zoom = 1.0, isBinary = false, currentChordIndex = 0, showCursor = false }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const osmdRef = useRef<OSMD | null>(null);
-    const chordIndicesRef = useRef<number[]>([]);  // Store chord positions for cursor navigation
 
     // Expose methods to parent component
     useImperativeHandle(ref, () => ({
@@ -41,12 +40,69 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
           // Reset cursor to beginning
           osmdRef.current.cursor.reset();
           
-          // Move cursor to the specified chord index
-          for (let i = 0; i < chordIndex && i < chordIndicesRef.current.length; i++) {
+          // Move cursor to the specified chord index, but only count entries with actual notes
+          let soundingNotesFound = 0;
+          let totalSteps = 0;
+          
+          while (soundingNotesFound < chordIndex && !osmdRef.current.cursor.Iterator.EndReached) {
             osmdRef.current.cursor.next();
+            totalSteps++;
+            
+            // Debug: Log what we're seeing at each step
+            const currentVoiceEntry = osmdRef.current.cursor.Iterator?.CurrentVoiceEntries?.[0];
+            const hasNotes = currentVoiceEntry?.Notes && currentVoiceEntry.Notes.length > 0;
+            
+            // Check if this is a rest using the proper methods
+            let isRest = false;
+            if (hasNotes) {
+              const noteObj = currentVoiceEntry.Notes[0];
+              // Use isRestFlag property or call isRest() function
+              isRest = (noteObj as any)?.isRestFlag || 
+                       (typeof (noteObj as any)?.isRest === 'function' && (noteObj as any).isRest());
+            }
+            
+            console.log(`Step ${totalSteps}: hasNotes=${hasNotes}, isRest=${isRest}, notes=${currentVoiceEntry?.Notes?.length || 0}`);
+            
+            // Only count this step if it has actual notes AND they are not rests
+            if (hasNotes && !isRest) {
+              soundingNotesFound++;
+              console.log(`  -> Counted as sounding note ${soundingNotesFound}`);
+            } else if (hasNotes && isRest) {
+              console.log(`  -> Skipped rest`);
+            } else {
+              console.log(`  -> Skipped empty entry`);
+            }
           }
           
-          console.log(`Moved cursor to chord ${chordIndex}`);
+          // Ensure we're positioned on a note, not a rest or empty entry
+          let finalSteps = 0;
+          while (!osmdRef.current.cursor.Iterator.EndReached && finalSteps < 10) { // Safety limit
+            const currentVoiceEntry = osmdRef.current.cursor.Iterator?.CurrentVoiceEntries?.[0];
+            const hasNotes = currentVoiceEntry?.Notes && currentVoiceEntry.Notes.length > 0;
+            
+            // Check if this is a rest using the proper methods
+            let isRest = false;
+            if (hasNotes) {
+              const noteObj = currentVoiceEntry.Notes[0];
+              // Use isRestFlag property or call isRest() function
+              isRest = (noteObj as any)?.isRestFlag || 
+                       (typeof (noteObj as any)?.isRest === 'function' && (noteObj as any).isRest());
+            }
+            
+            console.log(`Final positioning: hasNotes=${hasNotes}, isRest=${isRest}`);
+            
+            // Stop if we found a sounding note (has notes and is not a rest)
+            if (hasNotes && !isRest) {
+              console.log(`  -> Found sounding note, stopping here`);
+              break;
+            }
+            
+            console.log(`  -> Advancing past ${hasNotes ? 'rest' : 'empty entry'}`);
+            osmdRef.current.cursor.next();
+            finalSteps++;
+          }
+          
+          console.log(`Moved cursor to chord ${chordIndex} (found ${soundingNotesFound} sounding notes, took ${totalSteps} total steps, ${finalSteps} final steps)`);
         } catch (error) {
           console.error('Error moving cursor:', error);
         }
@@ -94,9 +150,53 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
           // Reset cursor to beginning
           osmdRef.current.cursor.reset();
           
-          // Move cursor to the specified chord index
-          for (let i = 0; i < currentChordIndex; i++) {
+          // Move cursor to the specified chord index, but only count entries with actual notes
+          let soundingNotesFound = 0;
+          
+          while (soundingNotesFound < currentChordIndex && !osmdRef.current.cursor.Iterator.EndReached) {
             osmdRef.current.cursor.next();
+            
+            // Debug: Log what we're seeing at each step
+            const currentVoiceEntry = osmdRef.current.cursor.Iterator?.CurrentVoiceEntries?.[0];
+            const hasNotes = currentVoiceEntry?.Notes && currentVoiceEntry.Notes.length > 0;
+            
+            // Check if this is a rest using the proper methods
+            let isRest = false;
+            if (hasNotes) {
+              const noteObj = currentVoiceEntry.Notes[0];
+              // Use isRestFlag property or call isRest() function
+              isRest = (noteObj as any)?.isRestFlag || 
+                       (typeof (noteObj as any)?.isRest === 'function' && (noteObj as any).isRest());
+            }
+            
+            // Only count this step if it has actual notes AND they are not rests
+            if (hasNotes && !isRest) {
+              soundingNotesFound++;
+            }
+          }
+          
+          // Ensure we're positioned on a note, not a rest or empty entry
+          let finalSteps = 0;
+          while (!osmdRef.current.cursor.Iterator.EndReached && finalSteps < 10) { // Safety limit
+            const currentVoiceEntry = osmdRef.current.cursor.Iterator?.CurrentVoiceEntries?.[0];
+            const hasNotes = currentVoiceEntry?.Notes && currentVoiceEntry.Notes.length > 0;
+            
+            // Check if this is a rest using the proper methods
+            let isRest = false;
+            if (hasNotes) {
+              const noteObj = currentVoiceEntry.Notes[0];
+              // Use isRestFlag property or call isRest() function
+              isRest = (noteObj as any)?.isRestFlag || 
+                       (typeof (noteObj as any)?.isRest === 'function' && (noteObj as any).isRest());
+            }
+            
+            // Stop if we found a sounding note (has notes and is not a rest)
+            if (hasNotes && !isRest) {
+              break;
+            }
+            
+            osmdRef.current.cursor.next();
+            finalSteps++;
           }
           
           osmdRef.current.cursor.show();
