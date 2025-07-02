@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { OpenSheetMusicDisplay as OSMD } from 'opensheetmusicdisplay';
 import JSZip from 'jszip';
 
@@ -9,11 +9,102 @@ interface OsmdViewerProps {
   isBinary?: boolean;
   /** Zoom factor (1.0 = 100%). */
   zoom?: number;
+  /** Current chord index for cursor positioning */
+  currentChordIndex?: number;
+  /** Whether to show the cursor */
+  showCursor?: boolean;
 }
 
-export default function OsmdViewer({ musicXml, zoom = 1.0, isBinary = false }: OsmdViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const osmdRef = useRef<OSMD | null>(null);
+export interface OsmdViewerRef {
+  /** Move cursor to a specific chord index */
+  moveCursorToChord: (chordIndex: number) => void;
+  /** Show the cursor */
+  showCursor: () => void;
+  /** Hide the cursor */
+  hideCursor: () => void;
+  /** Get current cursor position info */
+  getCursorInfo: () => any;
+}
+
+const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
+  ({ musicXml, zoom = 1.0, isBinary = false, currentChordIndex = 0, showCursor = false }, ref) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const osmdRef = useRef<OSMD | null>(null);
+    const chordIndicesRef = useRef<number[]>([]);  // Store chord positions for cursor navigation
+
+    // Expose methods to parent component
+    useImperativeHandle(ref, () => ({
+      moveCursorToChord: (chordIndex: number) => {
+        if (!osmdRef.current || !osmdRef.current.cursor) return;
+        
+        try {
+          // Reset cursor to beginning
+          osmdRef.current.cursor.reset();
+          
+          // Move cursor to the specified chord index
+          for (let i = 0; i < chordIndex && i < chordIndicesRef.current.length; i++) {
+            osmdRef.current.cursor.next();
+          }
+          
+          console.log(`Moved cursor to chord ${chordIndex}`);
+        } catch (error) {
+          console.error('Error moving cursor:', error);
+        }
+      },
+      
+      showCursor: () => {
+        if (osmdRef.current && osmdRef.current.cursor) {
+          osmdRef.current.cursor.show();
+        }
+      },
+      
+      hideCursor: () => {
+        if (osmdRef.current && osmdRef.current.cursor) {
+          osmdRef.current.cursor.hide();
+        }
+      },
+      
+      getCursorInfo: () => {
+        if (!osmdRef.current || !osmdRef.current.cursor) return null;
+        
+        try {
+          const cursor = osmdRef.current.cursor;
+          const currentVoiceEntry = cursor.Iterator?.CurrentVoiceEntries?.[0];
+          
+          if (currentVoiceEntry) {
+            const baseNote = currentVoiceEntry.Notes?.[0];
+            return {
+              stemDirection: currentVoiceEntry.StemDirection,
+              baseNotePitch: baseNote?.Pitch?.ToString(),
+              notes: currentVoiceEntry.Notes?.map((note: any) => note.Pitch?.ToString()) || []
+            };
+          }
+        } catch (error) {
+          console.error('Error getting cursor info:', error);
+        }
+        
+        return null;
+      }
+    }), []);
+  
+    // Update cursor position when currentChordIndex changes
+    useEffect(() => {
+      if (osmdRef.current && osmdRef.current.cursor && showCursor) {
+        try {
+          // Reset cursor to beginning
+          osmdRef.current.cursor.reset();
+          
+          // Move cursor to the specified chord index
+          for (let i = 0; i < currentChordIndex; i++) {
+            osmdRef.current.cursor.next();
+          }
+          
+          osmdRef.current.cursor.show();
+        } catch (error) {
+          console.error('Error updating cursor position:', error);
+        }
+      }
+    }, [currentChordIndex, showCursor]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -23,6 +114,12 @@ export default function OsmdViewer({ musicXml, zoom = 1.0, isBinary = false }: O
       osmdRef.current = new OSMD(containerRef.current, {
         autoResize: true,
         drawTitle: true,
+        cursorsOptions: [{
+          type: 0, // Standard cursor
+          color: '#ff0000', // Red cursor
+          alpha: 0.8,
+          follow: true
+        }]
       });
     }
 
@@ -164,5 +261,10 @@ export default function OsmdViewer({ musicXml, zoom = 1.0, isBinary = false }: O
     }
   }, [zoom]);
 
-  return <div ref={containerRef} style={{ width: '100%', minHeight: '400px' }} />;
-} 
+    return <div ref={containerRef} style={{ width: '100%', minHeight: '400px' }} />;
+  }
+);
+
+OsmdViewer.displayName = 'OsmdViewer';
+
+export default OsmdViewer; 

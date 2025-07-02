@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import OsmdViewer from './OsmdViewer';
+import OsmdViewer, { type OsmdViewerRef } from './OsmdViewer';
 import PerformanceMetricsDisplay from './PerformanceMetricsDisplay';
-import { usePlaybackCursor } from '../utils/usePlaybackCursor';
+import ChordDebugPanel from './ChordDebugPanel';
+import { ChordNavigator } from '../utils/ChordNavigator';
 import { PerformanceEvaluator } from '../utils/PerformanceEvaluator';
 
 // Define interfaces for the component's props and data structures
@@ -28,13 +29,6 @@ interface SheetMusicData {
   };
 }
 
-interface NoteHighlight {
-  noteId: string;
-  type: 'correct' | 'incorrect' | 'missed' | 'early' | 'late' | 'current';
-  intensity: number;
-  timestamp: number;
-}
-
 interface SheetMusicPlayerProps {
   activeMidiNotes: Map<number, { velocity: number; timestamp: number }>;
   onMidiMessage: (note: number, isNoteOn: boolean) => void;
@@ -44,194 +38,325 @@ interface SheetMusicPlayerProps {
 }
 
 export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, musicData, musicXml, musicXmlIsBinary }: SheetMusicPlayerProps) {
-  const [highlightedNotes, setHighlightedNotes] = useState<NoteHighlight[]>([]);
   const [zoom, setZoom] = useState(1.0);
   
-  // Performance evaluation state
+  // Chord navigation state
+  const [currentChordIndex, setCurrentChordIndex] = useState(0);
+  const [totalChords, setTotalChords] = useState(0);
+  const [isNavigationActive, setIsNavigationActive] = useState(false);
+  const [expectedNotes, setExpectedNotes] = useState<number[]>([]);
+  const [userInput, setUserInput] = useState<number[]>([]);
+  const [isChordComplete, setIsChordComplete] = useState(false);
+  const [currentChord, setCurrentChord] = useState<any>(null);
+  const [showDebugPanel, setShowDebugPanel] = useState(true);
+  
+  // Refs
+  const chordNavigatorRef = useRef<ChordNavigator | null>(null);
+  const osmdViewerRef = useRef<OsmdViewerRef>(null);
+  const evaluatorRef = useRef<PerformanceEvaluator | null>(null);
+  
+  // Performance evaluation state (keeping for compatibility)
   const [performanceMetrics, setPerformanceMetrics] = useState<any>(null);
   const [recentEvaluations, setRecentEvaluations] = useState<any[]>([]);
   const [isEvaluationActive, setIsEvaluationActive] = useState(false);
-  const evaluatorRef = useRef<PerformanceEvaluator | null>(null);
 
-  // This function is called when the playback cursor's position changes.
-  const handlePositionChange = useCallback((positionQuarters: number) => {
-    if (!musicData) return;
+  // Convert MIDI note map to array of currently pressed notes
+  const getCurrentlyPressedNotes = useCallback((): number[] => {
+    return Array.from(activeMidiNotes.keys());
+  }, [activeMidiNotes]);
 
-    // Highlight the notes that are currently supposed to be playing.
-    const currentNotes: NoteHighlight[] = [];
-    musicData.measures.forEach(measure => {
-      measure.notes.forEach(note => {
-        if (positionQuarters >= note.startTime && positionQuarters < note.endTime) {
-          currentNotes.push({
-            noteId: note.id,
-            type: 'current',
-            intensity: 1.0,
-            timestamp: Date.now()
-          });
+  // Initialize chord navigator when music data changes
+  useEffect(() => {
+    if (musicData) {
+      console.log('Initializing chord navigator with music data');
+      
+      // Create chord navigator
+      chordNavigatorRef.current = new ChordNavigator({
+        requireExactMatch: true,
+        onChordChange: (chord, index) => {
+          console.log(`Chord changed to index ${index}:`, chord);
+          setCurrentChordIndex(index);
+          setCurrentChord(chord);
+          setExpectedNotes(chord?.midiNumbers || []);
+          setIsChordComplete(false);
+          
+          // Update OSMD cursor position
+          if (osmdViewerRef.current) {
+            osmdViewerRef.current.moveCursorToChord(index);
+          }
+        },
+        onChordComplete: (chord) => {
+          console.log('Chord completed:', chord);
+          setIsChordComplete(true);
+          
+          // Brief delay to show completion, then move to next chord
+          setTimeout(() => {
+            setIsChordComplete(false);
+          }, 500);
+        },
+        onNavigationComplete: () => {
+          console.log('Navigation completed!');
+          setIsNavigationActive(false);
+          setCurrentChord(null);
+          setExpectedNotes([]);
+          
+          // Hide cursor when done
+          if (osmdViewerRef.current) {
+            osmdViewerRef.current.hideCursor();
+          }
         }
       });
-    });
 
-    // We merge the new "current" notes with existing highlights from MIDI input.
-    setHighlightedNotes(prev => [
-        ...prev.filter(h => h.type !== 'current'),
-        ...currentNotes
-    ]);
+      // Load chords from music data
+      chordNavigatorRef.current.loadChords(musicData);
+      
+      // Update state
+      const state = chordNavigatorRef.current.getState();
+      setTotalChords(state.totalChords);
+      setCurrentChordIndex(state.currentChordIndex);
+      setCurrentChord(state.currentChord);
+      setExpectedNotes(state.currentChord?.midiNumbers || []);
+      
+      // Initialize performance evaluator
+      evaluatorRef.current = new PerformanceEvaluator(musicData.tempo || 120);
+      evaluatorRef.current.loadExpectedNotes(musicData);
+      
+      // Reset state
+      setPerformanceMetrics(null);
+      setRecentEvaluations([]);
+      setIsEvaluationActive(false);
+      setIsNavigationActive(false);
+    }
+  }, [musicData]);
 
-    // Update performance metrics if evaluation is active.
-    if (evaluatorRef.current && isEvaluationActive) {
+  // Handle MIDI input changes
+  useEffect(() => {
+    const currentlyPressed = getCurrentlyPressedNotes();
+    setUserInput(currentlyPressed);
+
+    // If navigation is active, update chord navigator
+    if (isNavigationActive && chordNavigatorRef.current) {
+      // We need to handle note on/off events properly
+      // For now, let's just update based on the current pressed notes
+      const previousInput = chordNavigatorRef.current.getCurrentUserInput();
+      
+      // Find newly pressed and released notes
+      const newlyPressed = currentlyPressed.filter(note => !previousInput.includes(note));
+      const newlyReleased = previousInput.filter(note => !currentlyPressed.includes(note));
+      
+      // Update chord navigator for each note change
+      let navigationChanged = false;
+      
+      newlyPressed.forEach(note => {
+        const changed = chordNavigatorRef.current!.updateMidiInput(note, true);
+        if (changed) navigationChanged = true;
+      });
+      
+      newlyReleased.forEach(note => {
+        const changed = chordNavigatorRef.current!.updateMidiInput(note, false);
+        if (changed) navigationChanged = true;
+      });
+
+      // Update state if navigation changed
+      if (navigationChanged) {
+        const state = chordNavigatorRef.current.getState();
+        setCurrentChordIndex(state.currentChordIndex);
+        setCurrentChord(state.currentChord);
+        setExpectedNotes(state.currentChord?.midiNumbers || []);
+        setIsChordComplete(state.isChordComplete);
+      }
+    }
+
+    // Handle performance evaluation if active
+    if (isEvaluationActive && evaluatorRef.current) {
+      // This is a simplified version - in a real implementation, you'd want to
+      // properly handle note on/off events with timing
       const metrics = evaluatorRef.current.calculateMetrics();
       setPerformanceMetrics(metrics);
       setRecentEvaluations(evaluatorRef.current.getRecentEvaluations());
     }
-  }, [musicData, isEvaluationActive]);
-  
-  // This function is called when playback completes.
-  const handlePlaybackComplete = useCallback(() => {
-    console.log('Playback completed');
-    setHighlightedNotes([]);
-    
-    if (evaluatorRef.current) {
-      evaluatorRef.current.stopEvaluation();
-      setIsEvaluationActive(false);
-      const finalMetrics = evaluatorRef.current.calculateMetrics();
-      setPerformanceMetrics(finalMetrics);
-      console.log('Final performance metrics:', finalMetrics);
-    }
-  }, []);
-  
-  // The usePlaybackCursor hook gets re-initialized on every render.
-  // When musicData changes, these values are updated, and the hook gets the new state.
-  const playback = usePlaybackCursor({
-    tempo: musicData?.tempo || 120,
-    totalDurationQuarters: musicData?.totalDuration || 0,
-    onPositionChange: handlePositionChange,
-    onComplete: handlePlaybackComplete
-  });
-  
-  // This useEffect now correctly handles loading new music data.
-  useEffect(() => {
-    // When a new file is loaded, stop any ongoing playback.
-    playback.stop();
-    
-    // If there is new music data, create a new PerformanceEvaluator for it.
-    if (musicData) {
-      evaluatorRef.current = new PerformanceEvaluator(musicData.tempo || 120);
-      evaluatorRef.current.loadExpectedNotes(musicData);
+  }, [activeMidiNotes, isNavigationActive, isEvaluationActive, getCurrentlyPressedNotes]);
+
+  // Start chord navigation
+  const startChordNavigation = useCallback(() => {
+    if (chordNavigatorRef.current && musicData) {
+      console.log('Starting chord navigation');
+      chordNavigatorRef.current.reset();
+      setIsNavigationActive(true);
       
-      // Reset performance metrics display for the new song
-      setPerformanceMetrics(null);
-      setRecentEvaluations([]);
-      setIsEvaluationActive(false);
+      // Show cursor
+      if (osmdViewerRef.current) {
+        osmdViewerRef.current.showCursor();
+        osmdViewerRef.current.moveCursorToChord(0);
+      }
+      
+      // Also start performance evaluation
+      if (evaluatorRef.current) {
+        evaluatorRef.current.startEvaluation();
+        setIsEvaluationActive(true);
+      }
     }
   }, [musicData]);
 
-  const startEvaluation = useCallback(() => {
-    if (evaluatorRef.current && musicData) {
-      evaluatorRef.current.startEvaluation();
-      setIsEvaluationActive(true);
-      setPerformanceMetrics(null);
-      setRecentEvaluations([]);
-      console.log('Performance evaluation started');
+  // Stop chord navigation
+  const stopChordNavigation = useCallback(() => {
+    console.log('Stopping chord navigation');
+    setIsNavigationActive(false);
+    
+    // Hide cursor
+    if (osmdViewerRef.current) {
+      osmdViewerRef.current.hideCursor();
     }
-  }, [musicData]);
-
-  const stopEvaluation = useCallback(() => {
+    
+    // Stop performance evaluation
     if (evaluatorRef.current) {
       evaluatorRef.current.stopEvaluation();
       setIsEvaluationActive(false);
-      console.log('Performance evaluation stopped');
     }
   }, []);
 
-  // Handle MIDI input for performance evaluation and note highlighting.
-  useEffect(() => {
-    if (!playback.isPlaying || !musicData) return;
+  // Reset to beginning
+  const resetNavigation = useCallback(() => {
+    if (chordNavigatorRef.current) {
+      chordNavigatorRef.current.reset();
+      
+      // Reset cursor position
+      if (osmdViewerRef.current && isNavigationActive) {
+        osmdViewerRef.current.moveCursorToChord(0);
+      }
+    }
+  }, [isNavigationActive]);
 
-    const midiHighlights: NoteHighlight[] = [];
-    
-    activeMidiNotes.forEach((noteInfo, midiNumber) => {
-      musicData.measures.forEach(measure => {
-        measure.notes.forEach(note => {
-          if (note.midiNumbers.includes(midiNumber)) {
-            const timingWindow = 0.5;
-            const noteTime = note.startTime;
-            const currentTime = playback.currentPositionQuarters;
-            
-            if (Math.abs(currentTime - noteTime) <= timingWindow) {
-              midiHighlights.push({
-                noteId: note.id,
-                type: 'correct',
-                intensity: 1.0,
-                timestamp: Date.now()
-              });
-            }
-          }
-        });
-      });
-    });
-    
-    setHighlightedNotes(prev => {
-      const positionHighlights = prev.filter(h => h.type !== 'current');
-      return [...positionHighlights, ...midiHighlights];
-    });
-    
-  }, [activeMidiNotes, playback.isPlaying, playback.currentPositionQuarters, musicData]);
+  // Seek to specific chord
+  const seekToChord = useCallback((chordIndex: number) => {
+    if (chordNavigatorRef.current) {
+      chordNavigatorRef.current.seekToChord(chordIndex);
+      
+      // Update cursor position
+      if (osmdViewerRef.current && isNavigationActive) {
+        osmdViewerRef.current.moveCursorToChord(chordIndex);
+      }
+    }
+  }, [isNavigationActive]);
 
-  // This effect fades out old highlights over time.
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setHighlightedNotes(prev => 
-        prev.map(highlight => ({
-          ...highlight,
-          intensity: Math.max(0, highlight.intensity - 0.05)
-        })).filter(highlight => highlight.intensity > 0 && highlight.type !== 'current')
-      );
-    }, 50);
-    
-    return () => clearInterval(interval);
-  }, []);
+  // Calculate progress
+  const progress = totalChords > 0 ? currentChordIndex / totalChords : 0;
 
   return (
     <div className="sheet-music-player" style={{ display: 'flex', flex: 1, overflow: 'hidden', height: '100%' }}>
-      <div style={{ flex: 3, overflow: 'auto', padding: '20px', backgroundColor: '#fff', color: '#000' }}>
-          {musicData && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #dee2e6', marginBottom: '15px' }}>
-              <button onClick={playback.isPlaying ? playback.pause : playback.play} className="button primary">
-                {playback.isPlaying ? '⏸️ Pause' : '▶️ Play'}
-              </button>
-              <button onClick={playback.stop} className="button secondary">⏹️ Stop</button>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span>Zoom:</span>
-                <input type="range" min="0.5" max="2.0" step="0.1" value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} />
-                <span>{(zoom * 100).toFixed(0)}%</span>
-              </div>
-               <div style={{flex: 1, marginLeft: '20px'}}>
-                  <div style={{ width: '100%', height: '8px', backgroundColor: '#e9ecef', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: `${playback.progress * 100}%`, height: '100%', backgroundColor: '#007bff', transition: 'width 0.1s linear' }} />
-                  </div>
+      {/* Main sheet music area */}
+      <div style={{ flex: showDebugPanel ? 2 : 3, overflow: 'auto', padding: '20px', backgroundColor: '#fff', color: '#000' }}>
+        {musicData && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #dee2e6', marginBottom: '15px' }}>
+                         <button 
+               onClick={isNavigationActive ? stopChordNavigation : startChordNavigation} 
+               className="button primary"
+             >
+               {isNavigationActive ? '⏹️ Stop Navigation' : '▶️ Start Note-by-Note'}
+             </button>
+            
+            <button 
+              onClick={resetNavigation} 
+              className="button secondary"
+              disabled={!isNavigationActive}
+            >
+              ↺ Reset
+            </button>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span>Zoom:</span>
+              <input 
+                type="range" 
+                min="0.5" 
+                max="2.0" 
+                step="0.1" 
+                value={zoom} 
+                onChange={(e) => setZoom(parseFloat(e.target.value))} 
+              />
+              <span>{(zoom * 100).toFixed(0)}%</span>
+            </div>
+            
+            <button 
+              onClick={() => setShowDebugPanel(!showDebugPanel)} 
+              className="button secondary"
+            >
+              {showDebugPanel ? '🔍 Hide Debug' : '🔍 Show Debug'}
+            </button>
+            
+            <div style={{ flex: 1, marginLeft: '20px' }}>
+                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                 <span style={{ fontSize: '14px', color: '#666' }}>
+                   {expectedNotes.length === 1 ? 'Note' : 'Chord'} {currentChordIndex + 1} of {totalChords}
+                 </span>
+                <div style={{ 
+                  width: '100%', 
+                  height: '8px', 
+                  backgroundColor: '#e9ecef', 
+                  borderRadius: '4px', 
+                  overflow: 'hidden' 
+                }}>
+                  <div style={{ 
+                    width: `${progress * 100}%`, 
+                    height: '100%', 
+                    backgroundColor: isChordComplete ? '#28a745' : '#007bff', 
+                    transition: 'width 0.3s ease, background-color 0.3s ease' 
+                  }} />
+                </div>
               </div>
             </div>
-          )}
-
-          <OsmdViewer
-            musicXml={musicXml}
-            zoom={zoom}
-            isBinary={musicXmlIsBinary}
-          />
-        </div>
-        
-        {musicData && (
-          <div style={{ flex: 1, minWidth: '350px', overflow: 'auto', padding: '20px', backgroundColor: '#f8f9fa', borderLeft: '1px solid #dee2e6' }}>
-            <PerformanceMetricsDisplay
-              metrics={performanceMetrics}
-              recentEvaluations={recentEvaluations}
-              isActive={isEvaluationActive}
-              expectedTempo={musicData.tempo || 120}
-            />
           </div>
         )}
+
+        <OsmdViewer
+          ref={osmdViewerRef}
+          musicXml={musicXml}
+          zoom={zoom}
+          isBinary={musicXmlIsBinary}
+          currentChordIndex={currentChordIndex}
+          showCursor={isNavigationActive}
+        />
+      </div>
+
+      {/* Debug panel */}
+      {showDebugPanel && (
+        <div style={{ 
+          flex: 1, 
+          minWidth: '400px', 
+          maxWidth: '500px',
+          overflow: 'auto', 
+          padding: '20px', 
+          backgroundColor: '#f8f9fa', 
+          borderLeft: '1px solid #dee2e6' 
+        }}>
+          <ChordDebugPanel
+            expectedNotes={expectedNotes}
+            userInput={userInput}
+            currentChordIndex={currentChordIndex}
+            totalChords={totalChords}
+            isChordComplete={isChordComplete}
+            currentChord={currentChord}
+          />
+        </div>
+      )}
+      
+      {/* Performance metrics (when debug panel is hidden) */}
+      {!showDebugPanel && musicData && (
+        <div style={{ 
+          flex: 1, 
+          minWidth: '350px', 
+          overflow: 'auto', 
+          padding: '20px', 
+          backgroundColor: '#f8f9fa', 
+          borderLeft: '1px solid #dee2e6' 
+        }}>
+          <PerformanceMetricsDisplay
+            metrics={performanceMetrics}
+            recentEvaluations={recentEvaluations}
+            isActive={isEvaluationActive}
+            expectedTempo={musicData.tempo || 120}
+          />
+        </div>
+      )}
     </div>
   );
 }
