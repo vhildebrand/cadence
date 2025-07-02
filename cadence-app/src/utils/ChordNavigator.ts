@@ -232,25 +232,56 @@ export class ChordNavigator {
   }
 
   /**
+   * Compute the set of notes that should still be held from previous chords
+   */
+  private getHeldNotesForCurrent(): Set<number> {
+    if (!this.state.currentChord) return new Set();
+
+    const held: Set<number> = new Set();
+    const currentStart = this.state.currentChord.startTimeQuarters;
+
+    // Look back through all previous chords to see if their endTime goes past current start
+    for (let i = 0; i < this.state.currentChordIndex; i++) {
+      const prevChord = this.chords[i];
+      if (!prevChord) continue;
+      // Only consider hold-over if in the same measure to avoid incorrect carry-over when
+      // measure startTime values reset (MusicXML offsets are per-measure).
+      if (prevChord.measureNumber === this.state.currentChord!.measureNumber &&
+          prevChord.endTimeQuarters > currentStart) {
+        prevChord.midiNumbers.forEach(n => held.add(n));
+      }
+    }
+
+    return held;
+  }
+
+  /**
    * Check if the current chord is complete based on user input
    */
   private checkChordComplete(): boolean {
     if (!this.state.currentChord) return false;
 
-    const expectedNotes = new Set(this.state.currentChord.midiNumbers);
+    // Notes that start at this chord
+    const currentChordNotes = new Set(this.state.currentChord.midiNumbers);
+    // Notes that should still be held from previous chords
+    const heldNotes = this.getHeldNotesForCurrent();
+
+    // Required notes are union of held + current chord notes
+    const requiredNotes = new Set<number>([...heldNotes, ...currentChordNotes]);
     const userNotes = this.state.userInput;
 
-    // Check if all expected notes are pressed
-    const hasAllExpected = Array.from(expectedNotes).every(note => userNotes.has(note));
+    // Must have all required notes pressed
+    const hasAllRequired = Array.from(requiredNotes).every(n => userNotes.has(n));
+
+    if (!hasAllRequired) return false;
 
     if (this.options.requireExactMatch) {
-      // In exact match mode, user must press exactly the expected notes (no extra)
-      const hasOnlyExpected = Array.from(userNotes).every(note => expectedNotes.has(note));
-      return hasAllExpected && hasOnlyExpected && expectedNotes.size === userNotes.size;
-    } else {
-      // In non-exact mode, just need all expected notes (extra notes OK)
-      return hasAllExpected;
+      // Disallow any extra notes beyond required
+      const hasOnlyRequired = Array.from(userNotes).every(n => requiredNotes.has(n));
+      return hasOnlyRequired;
     }
+
+    return true;
   }
 
   /**
