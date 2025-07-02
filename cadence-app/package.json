@@ -13,12 +13,16 @@
     "electron:build": "tsc -p tsconfig.electron.json && node -e \"require('fs').writeFileSync('dist-electron/package.json', JSON.stringify({ type: 'commonjs' }))\""
   },
   "dependencies": {
+    "chart.js": "^4.5.0",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^10.1.0",
     "python-shell": "^5.0.0",
     "react": "^19.1.0",
+    "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.1.0",
-    "rest": "^2.0.0"
+    "rest": "^2.0.0",
+    "tone": "^15.1.22",
+    "vexflow": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",

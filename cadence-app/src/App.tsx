@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 import NoteFall from './components/NoteFall'
+import SheetMusicPlayer from './components/SheetMusicPlayer'
 
 // Define the MIDI message type
 interface MidiMessage {
@@ -29,13 +30,37 @@ interface DrillState {
   streak: number;
 }
 
-type AppMode = 'interval-drill' | 'note-fall';
+// Define the SheetMusicData interface, which will be used to pass data
+interface SheetMusicData {
+  measures: Array<{
+    notes: Array<{
+      keys: string[];
+      duration: string;
+      startTime: number;
+      endTime: number;
+      id: string;
+      midiNumbers: number[];
+    }>;
+    measureNumber: number;
+    clef: string;
+    timeSignature?: [number, number];
+    keySignature?: string;
+  }>;
+  tempo: number;
+  totalDuration: number;
+  metadata: {
+    title?: string;
+    composer?: string;
+  };
+}
+
+type AppMode = 'interval-drill' | 'note-fall' | 'sheet-music';
 
 function App() {
-  const [currentMode, setCurrentMode] = useState<AppMode>('interval-drill');
-  const [midiMessage, setMidiMessage] = useState<MidiMessage | null>(null)
-  const [midiHistory, setMidiHistory] = useState<MidiMessage[]>([])
-  const [activeMidiNotes, setActiveMidiNotes] = useState<Map<number, ActiveNote>>(new Map())
+  const [currentMode, setCurrentMode] = useState<AppMode>('sheet-music');
+  const [midiMessage, setMidiMessage] = useState<MidiMessage | null>(null);
+  const [midiHistory, setMidiHistory] = useState<MidiMessage[]>([]);
+  const [activeMidiNotes, setActiveMidiNotes] = useState<Map<number, ActiveNote>>(new Map());
   const [midiAccess, setMidiAccess] = useState<any>(null);
   const [midiStatus, setMidiStatus] = useState<string>('Not connected');
   const [connectedDevices, setConnectedDevices] = useState<string[]>([]);
@@ -57,6 +82,12 @@ function App() {
     streak: 0
   });
   const [isRunningDrill, setIsRunningDrill] = useState(false);
+
+  // State for sheet music file loading (moved from SheetMusicPlayer)
+  const [musicData, setMusicData] = useState<SheetMusicData | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   // Initialize Web MIDI API
   useEffect(() => {
@@ -181,6 +212,38 @@ function App() {
       });
     }
   };
+
+  const loadMusicXMLFile = useCallback(async () => {
+    try {
+      setIsLoadingFile(true);
+      setFileError(null);
+      
+      const fileResult = await (window as any).electronAPI.selectMusicXMLFile();
+      
+      if (fileResult.canceled) {
+        setIsLoadingFile(false);
+        return;
+      }
+      
+      setSelectedFile(fileResult.filePath);
+      
+      const parseResult = await (window as any).electronAPI.parseSheetMusic(fileResult.filePath);
+      
+      if (!parseResult.success) {
+        throw new Error(parseResult.error || 'Failed to parse MusicXML file');
+      }
+      
+      setMusicData(parseResult.data);
+      console.log('Sheet music loaded:', parseResult.data);
+      
+    } catch (error) {
+      console.error('Error loading MusicXML file:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setFileError(errorMessage);
+    } finally {
+      setIsLoadingFile(false);
+    }
+  }, []);
 
   const evaluateCurrentAnswer = async (userAnswer: number[]) => {
     if (!drillState.isActive || userAnswer.length === 0) return;
@@ -310,20 +373,26 @@ function App() {
         <header className="app-header">
           <div className="header-content">
             <h1>🎹 Cadence</h1>
-            <nav className="mode-nav">
-              <button 
-                onClick={() => setCurrentMode('interval-drill')}
-                className="button secondary"
-              >
-                Interval Drill
-              </button>
-              <button 
-                onClick={() => setCurrentMode('note-fall')}
-                className="button primary"
-              >
-                Note Fall
-              </button>
-            </nav>
+                      <nav className="mode-nav">
+            <button 
+              onClick={() => setCurrentMode('interval-drill')}
+              className="button secondary"
+            >
+              Interval Drill
+            </button>
+            <button 
+              onClick={() => setCurrentMode('note-fall')}
+              className={currentMode === 'note-fall' ? 'button primary' : 'button secondary'}
+            >
+              Note Fall
+            </button>
+            <button 
+              onClick={() => setCurrentMode('sheet-music')}
+              className={currentMode === 'sheet-music' ? 'button primary' : 'button secondary'}
+            >
+              Sheet Music
+            </button>
+          </nav>
             <div className="note-range-controls">
               <label>Note Range:</label>
               <select 
@@ -361,6 +430,55 @@ function App() {
     );
   }
 
+  // UPDATED: Sheet Music mode
+  if (currentMode === 'sheet-music') {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <div className="header-content">
+            <h1>🎹 Cadence</h1>
+            <nav className="mode-nav">
+              <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
+              <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
+              <button onClick={() => setCurrentMode('sheet-music')} className="button primary">Sheet Music</button>
+            </nav>
+            {/* ADDED FILE CONTROLS TO THE MAIN HEADER */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={loadMusicXMLFile}
+                  disabled={isLoadingFile}
+                  className="button secondary"
+                >
+                  {isLoadingFile ? 'Loading...' : 'Load MusicXML'}
+                </button>
+                {selectedFile && (
+                  <span style={{ fontSize: '12px', color: '#ccc', maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {selectedFile.split(/[\\/]/).pop()}
+                  </span>
+                )}
+            </div>
+          </div>
+          <div className="midi-status-compact">
+            <span className={`status-dot ${connectedDevices.length > 0 ? 'connected' : 'disconnected'}`}></span>
+            {connectedDevices.length > 0 ? `${connectedDevices.length} MIDI device(s)` : 'No MIDI'}
+          </div>
+        </header>
+
+        {fileError && (
+          <div style={{ padding: '10px', backgroundColor: '#8B0000', color: 'white', textAlign: 'center' }}>
+            <strong>Error:</strong> {fileError}
+          </div>
+        )}
+
+        <SheetMusicPlayer 
+          activeMidiNotes={activeMidiNotes}
+          onMidiMessage={handleMIDIMessage}
+          musicData={musicData} // Pass the loaded data as a prop
+        />
+      </div>
+    );
+  }
+
   // Default: Interval Drill mode
   return (
     <div className="app">
@@ -370,7 +488,7 @@ function App() {
           <nav className="mode-nav">
             <button 
               onClick={() => setCurrentMode('interval-drill')}
-              className="button primary"
+              className={currentMode === 'interval-drill' ? 'button primary' : 'button secondary'}
             >
               Interval Drill
             </button>
@@ -379,6 +497,12 @@ function App() {
               className="button secondary"
             >
               Note Fall
+            </button>
+            <button 
+              onClick={() => setCurrentMode('sheet-music')}
+              className="button secondary"
+            >
+              Sheet Music
             </button>
           </nav>
         </div>

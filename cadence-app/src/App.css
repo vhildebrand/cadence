@@ -31,6 +31,13 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
   font-weight: 700;
+  /* Fallback for problematic browsers */
+  color: #646cff;
+}
+
+.app-header h1::-moz-selection {
+  color: #646cff;
+  background: rgba(100, 108, 255, 0.3);
 }
 
 .mode-nav {

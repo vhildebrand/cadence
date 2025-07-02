@@ -6,6 +6,7 @@ export const electronAPI = {
   runCadenceGraph: (command: string, args?: string) => ipcRenderer.invoke('run-cadence-graph', command, args),
   selectMusicXMLFile: () => ipcRenderer.invoke('select-musicxml-file'),
   parseMusicXML: (filePath: string) => ipcRenderer.invoke('parse-musicxml', filePath),
+  parseSheetMusic: (filePath: string) => ipcRenderer.invoke('parse-sheet-music', filePath),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

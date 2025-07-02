@@ -4,13 +4,39 @@
   font-weight: 400;
 
   color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
+  color: #ffffff;
   background-color: #1e1e2e;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Fix for VexFlow and general text visibility */
+.vexflow-container, .vexflow-container * {
+  color: #333333 !important;
+  background-color: white !important;
+}
+
+/* Ensure all text is visible by default */
+* {
+  color: inherit;
+}
+
+/* Fix gradient text issues */
+.gradient-text {
+  background: linear-gradient(45deg, #646cff, #4facfe);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  /* Fallback for unsupported browsers */
+  color: #646cff;
+}
+
+.gradient-text::-moz-selection {
+  color: #646cff;
+  background: rgba(100, 108, 255, 0.3);
 }
 
 * {

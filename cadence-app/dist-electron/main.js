@@ -136,6 +136,83 @@ electron_1.ipcMain.handle('parse-musicxml', async (event, filePath) => {
         });
     });
 });
+// Sheet Music parsing IPC handler
+electron_1.ipcMain.handle('parse-sheet-music', async (event, filePath) => {
+    return new Promise((resolve, reject) => {
+        const scriptsDir = path_1.default.join(__dirname, '..', 'scripts');
+        const scriptName = 'musicxml_parser.py';
+        // Use system Python3
+        const pythonPath = process.platform === 'win32'
+            ? 'python'
+            : 'python3';
+        const options = {
+            mode: 'text',
+            pythonPath: pythonPath,
+            scriptPath: scriptsDir,
+            args: ['sheet_music', filePath],
+        };
+        console.log('Parsing MusicXML for sheet music:', filePath);
+        console.log('Using script:', scriptName);
+        console.log('From directory:', scriptsDir);
+        const shell = new python_shell_1.PythonShell(scriptName, options);
+        let output = [];
+        let errorOutput = [];
+        shell.on('message', (message) => {
+            console.log('Sheet Music Parser output:', message);
+            output.push(message);
+        });
+        shell.on('stderr', (stderr) => {
+            console.error('Sheet Music Parser stderr:', stderr);
+            errorOutput.push(stderr);
+        });
+        shell.on('close', () => {
+            if (output.length > 0) {
+                try {
+                    // Try to parse the JSON output
+                    const fullOutput = output.join('\n');
+                    const parsedResult = JSON.parse(fullOutput);
+                    if (parsedResult.error) {
+                        resolve({
+                            success: false,
+                            error: parsedResult.error
+                        });
+                    }
+                    else {
+                        resolve({
+                            success: true,
+                            data: parsedResult
+                        });
+                    }
+                }
+                catch (parseError) {
+                    resolve({
+                        success: false,
+                        error: `Failed to parse Python output: ${parseError}`
+                    });
+                }
+            }
+            else if (errorOutput.length > 0) {
+                resolve({
+                    success: false,
+                    error: `Sheet Music parsing error: ${errorOutput.join('\n')}`
+                });
+            }
+            else {
+                resolve({
+                    success: false,
+                    error: 'No output from Sheet Music parser'
+                });
+            }
+        });
+        shell.on('error', (err) => {
+            console.error('Sheet Music Parser shell error:', err);
+            resolve({
+                success: false,
+                error: `Python shell error: ${err.message}`
+            });
+        });
+    });
+});
 // Python bridge IPC handler for running hello.py
 electron_1.ipcMain.handle('run-python-hello', async () => {
     return new Promise((resolve, reject) => {

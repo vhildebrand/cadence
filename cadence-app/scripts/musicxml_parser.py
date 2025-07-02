@@ -104,7 +104,7 @@ class MusicXMLParser:
         notes_data = []
 
         for part in self.score.parts:  # Iterate over each part/staff independently
-            flat_stream = part.flat   # "flatten" resolves measures/voices into one timeline
+            flat_stream = part.flatten()   # "flatten" resolves measures/voices into one timeline
 
             for el in flat_stream.notesAndRests:
                 start_q = float(el.offset)  # Already absolute within the part
@@ -258,6 +258,169 @@ class MusicXMLParser:
                 game_notes.append(game_note)
         
         return game_notes
+    
+    def get_sheet_music_data(self) -> Dict[str, Any]:
+        """Get notes formatted for sheet music rendering with VexFlow"""
+        if not self.score:
+            return None
+            
+        print(f"DEBUG: Processing {len(self.score.parts)} parts for sheet music", file=sys.stderr)
+            
+        sheet_music_data = {
+            'measures': [],
+            'tempo': self.tempo_bpm,
+            'totalDuration': self.parsed_data['total_duration'],
+            'metadata': self.parsed_data['metadata']
+        }
+        
+        # Process each measure
+        for part_index, part in enumerate(self.score.parts):
+            measures = part.getElementsByClass(stream.Measure)
+            print(f"DEBUG: Part {part_index} has {len(measures)} measures", file=sys.stderr)
+            
+            for measure in measures:
+                measure_data = {
+                    'notes': [],
+                    'measureNumber': measure.number,
+                    'clef': 'treble',  # Default to treble clef
+                    'timeSignature': None,
+                    'keySignature': None
+                }
+                
+                # Get time signature from measure
+                ts = measure.timeSignature
+                if ts:
+                    measure_data['timeSignature'] = [ts.numerator, ts.denominator]
+                
+                # Get key signature from measure
+                ks = measure.keySignature
+                if ks:
+                    # Normalize key signature to something VexFlow can understand
+                    if 'no sharps or flats' in str(ks):
+                        measure_data['keySignature'] = 'C'
+                    else:
+                        measure_data['keySignature'] = str(ks)
+                
+                # Convert notes in this measure to VexFlow format
+                for element in measure.notesAndRests:
+                    if isinstance(element, note.Note):
+                        vf_note = self._convert_note_to_vexflow(element)
+                        if vf_note:
+                            measure_data['notes'].append(vf_note)
+                    elif isinstance(element, chord.Chord):
+                        vf_note = self._convert_chord_to_vexflow(element)
+                        if vf_note:
+                            measure_data['notes'].append(vf_note)
+                    elif isinstance(element, note.Rest):
+                        vf_note = self._convert_rest_to_vexflow(element)
+                        if vf_note:
+                            measure_data['notes'].append(vf_note)
+                
+                sheet_music_data['measures'].append(measure_data)
+        
+        print(f"DEBUG: Returning sheet music data with {len(sheet_music_data['measures'])} measures", file=sys.stderr)
+        if sheet_music_data['measures']:
+            first_measure = sheet_music_data['measures'][0]
+            print(f"DEBUG: First measure has {len(first_measure.get('notes', []))} notes", file=sys.stderr)
+        
+        return sheet_music_data
+    
+    def _convert_note_to_vexflow(self, note_obj: note.Note) -> Dict[str, Any]:
+        """Convert a music21 Note to VexFlow format"""
+        try:
+            # Convert pitch to VexFlow format (e.g., "C4", "F#5")
+            pitch_name = note_obj.pitch.name
+            octave = note_obj.pitch.octave
+            vf_key = f"{pitch_name}{octave}"
+            
+            # Convert duration to VexFlow format
+            vf_duration = self._duration_to_vexflow(note_obj.duration.quarterLength)
+            
+            return {
+                'keys': [vf_key],
+                'duration': vf_duration,
+                'startTime': float(note_obj.offset),
+                'endTime': float(note_obj.offset + note_obj.duration.quarterLength),
+                'id': f"note_{note_obj.offset}_{pitch_name}{octave}",
+                'midiNumbers': [note_obj.pitch.midi],
+                'stem_direction': 1 if note_obj.pitch.midi >= 60 else -1  # Middle C and above = up stem
+            }
+        except Exception as e:
+            print(f"Error converting note to VexFlow: {e}")
+            return None
+    
+    def _convert_chord_to_vexflow(self, chord_obj: chord.Chord) -> Dict[str, Any]:
+        """Convert a music21 Chord to VexFlow format"""
+        try:
+            # Convert all pitches in chord to VexFlow keys
+            vf_keys = []
+            midi_numbers = []
+            
+            for pitch in chord_obj.pitches:
+                pitch_name = pitch.name
+                octave = pitch.octave
+                vf_keys.append(f"{pitch_name}{octave}")
+                midi_numbers.append(pitch.midi)
+            
+            # Convert duration to VexFlow format
+            vf_duration = self._duration_to_vexflow(chord_obj.duration.quarterLength)
+            
+            return {
+                'keys': vf_keys,
+                'duration': vf_duration,
+                'startTime': float(chord_obj.offset),
+                'endTime': float(chord_obj.offset + chord_obj.duration.quarterLength),
+                'id': f"chord_{chord_obj.offset}_{len(vf_keys)}notes",
+                'midiNumbers': midi_numbers,
+                'stem_direction': 1 if min(midi_numbers) >= 60 else -1
+            }
+        except Exception as e:
+            print(f"Error converting chord to VexFlow: {e}")
+            return None
+    
+    def _convert_rest_to_vexflow(self, rest_obj: note.Rest) -> Dict[str, Any]:
+        """Convert a music21 Rest to VexFlow format"""
+        try:
+            # Convert duration to VexFlow format
+            vf_duration = self._duration_to_vexflow(rest_obj.duration.quarterLength)
+            
+            return {
+                'keys': ['B4'],  # VexFlow uses B4 for rest positioning
+                'duration': vf_duration,
+                'startTime': float(rest_obj.offset),
+                'endTime': float(rest_obj.offset + rest_obj.duration.quarterLength),
+                'id': f"rest_{rest_obj.offset}",
+                'midiNumbers': [],
+                'isRest': True
+            }
+        except Exception as e:
+            print(f"Error converting rest to VexFlow: {e}")
+            return None
+    
+    def _duration_to_vexflow(self, quarter_length: float) -> str:
+        """Convert music21 duration to VexFlow duration string"""
+        # Map common durations to VexFlow notation
+        duration_map = {
+            4.0: 'w',    # whole note
+            3.0: 'h.',   # dotted half
+            2.0: 'h',    # half note
+            1.5: 'q.',   # dotted quarter
+            1.0: 'q',    # quarter note
+            0.75: '8.',  # dotted eighth
+            0.5: '8',    # eighth note
+            0.25: '16',  # sixteenth note
+            0.125: '32', # thirty-second note
+        }
+        
+        # Find closest match
+        closest_dur = min(duration_map.keys(), key=lambda x: abs(x - quarter_length))
+        
+        # If the difference is small, use the mapped duration
+        if abs(closest_dur - quarter_length) < 0.1:
+            return duration_map[closest_dur]
+        
+        # Default to quarter note if no close match
+        return 'q'
 
 
 def main():
@@ -289,6 +452,12 @@ def main():
                 'total_duration': parser.parsed_data['total_duration']
             }
             print(json.dumps(result, indent=2))
+            
+        elif command == "sheet_music":
+            # Parse and return sheet music formatted data
+            parser.parse_file(file_path)
+            sheet_music_data = parser.get_sheet_music_data()
+            print(json.dumps(sheet_music_data, indent=2))
             
         else:
             print(f"Unknown command: {command}")
