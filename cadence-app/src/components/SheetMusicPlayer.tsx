@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import OsmdViewer, { type OsmdViewerRef } from './OsmdViewer';
 import PerformanceMetricsDisplay from './PerformanceMetricsDisplay';
 import ChordDebugPanel from './ChordDebugPanel';
+import Metronome from './Metronome';
 import { ChordNavigator } from '../utils/ChordNavigator';
 import { PerformanceEvaluator } from '../utils/PerformanceEvaluator';
 
@@ -282,6 +283,9 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             >
               {showDebugPanel ? '🔍 Hide Debug' : '🔍 Show Debug'}
             </button>
+            
+            {/* Metronome Control */}
+            <Metronome initialBpm={musicData?.tempo || 120} />
             
             <div style={{ flex: 1, marginLeft: '20px' }}>
                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
