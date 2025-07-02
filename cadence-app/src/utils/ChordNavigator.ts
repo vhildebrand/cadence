@@ -276,9 +276,14 @@ export class ChordNavigator {
     if (!hasAllRequired) return false;
 
     if (this.options.requireExactMatch) {
-      // Disallow any extra notes beyond required
-      const hasOnlyRequired = Array.from(userNotes).every(n => requiredNotes.has(n));
-      return hasOnlyRequired;
+      // Allow overlap: notes that belonged to the immediately previous chord (grace overlap)
+      const toleratedExtra = new Set<number>();
+      if (this.state.currentChordIndex > 0) {
+        this.chords[this.state.currentChordIndex - 1].midiNumbers.forEach(n => toleratedExtra.add(n));
+      }
+
+      const hasOnlyAllowed = Array.from(userNotes).every(n => requiredNotes.has(n) || toleratedExtra.has(n));
+      return hasOnlyAllowed;
     }
 
     return true;
