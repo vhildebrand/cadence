@@ -106,35 +106,105 @@ export default function Metronome({
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <button
-        onClick={() => setIsRunning(prev => !prev)}
-        className="button secondary"
-        style={{ minWidth: '110px' }}
-      >
-        {isRunning ? '⏹️ Stop' : '▶️ Metronome'}
-      </button>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        backgroundColor: 'rgba(0, 0, 0, 0.25)',
+        border: '1px solid #3a3a4a',
+        borderRadius: '8px',
+        padding: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.6)',
+        maxWidth: '250px',
+        width: '100%',
+        color: '#ffffff',
+        backdropFilter: 'blur(8px)'
+      }}
+    >
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 600, fontSize: '14px' }}>Metronome</span>
 
-      {/* BPM number input */}
-      <input
-        type="number"
-        value={bpm}
-        min={minBpm}
-        max={maxBpm}
-        step={1}
-        onChange={e => handleBpmInput(parseInt(e.target.value, 10) || minBpm)}
-        style={{ width: '60px', textAlign: 'center' }}
-      />
-      <span style={{ fontSize: '0.85em', color: '#666' }}>BPM</span>
+        <button
+          onClick={() => setIsRunning(prev => !prev)}
+          title={isRunning ? 'Stop Metronome' : 'Start Metronome'}
+          style={{
+            width: '34px',
+            height: '34px',
+            borderRadius: '50%',
+            border: 'none',
+            backgroundColor: isRunning ? '#dc3545' : '#28a745',
+            color: 'white',
+            cursor: 'pointer',
+            fontSize: '16px',
+            lineHeight: 1
+          }}
+        >
+          {isRunning ? '■' : '▶'}
+        </button>
+      </div>
 
-      {/* Optional slider for quick tempo changes */}
+      {/* BPM controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button
+          aria-label="Decrease tempo"
+          onClick={() => handleBpmInput(bpm - 1)}
+          style={{
+            width: '28px',
+            height: '28px',
+            border: '1px solid #555',
+            borderRadius: '4px',
+            backgroundColor: '#2a2a3e',
+            cursor: 'pointer',
+            color: '#ffffff'
+          }}
+        >
+          –
+        </button>
+
+        <input
+          type="number"
+          value={bpm}
+          min={minBpm}
+          max={maxBpm}
+          step={1}
+          onChange={e => handleBpmInput(parseInt(e.target.value, 10) || minBpm)}
+          style={{
+            width: '60px',
+            textAlign: 'center',
+            padding: '4px 6px',
+            border: '1px solid #ced4da',
+            borderRadius: '4px'
+          }}
+        />
+        <span style={{ fontSize: '0.85em', color: '#666' }}>BPM</span>
+
+        <button
+          aria-label="Increase tempo"
+          onClick={() => handleBpmInput(bpm + 1)}
+          style={{
+            width: '28px',
+            height: '28px',
+            border: '1px solid #555',
+            borderRadius: '4px',
+            backgroundColor: '#2a2a3e',
+            cursor: 'pointer',
+            color: '#ffffff'
+          }}
+        >
+          +
+        </button>
+      </div>
+
+      {/* Slider */}
       <input
         type="range"
         min={minBpm}
         max={maxBpm}
         value={bpm}
         onChange={e => handleBpmInput(parseInt(e.target.value, 10))}
-        style={{ flex: 1, maxWidth: '150px' }}
+        style={{ width: '100%', accentColor: '#646cff' }}
       />
     </div>
   );

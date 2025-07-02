@@ -284,9 +284,6 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
               {showDebugPanel ? '🔍 Hide Debug' : '🔍 Show Debug'}
             </button>
             
-            {/* Metronome Control */}
-            <Metronome initialBpm={musicData?.tempo || 120} />
-            
             <div style={{ flex: 1, marginLeft: '20px' }}>
                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                  <span style={{ fontSize: '14px', color: '#666' }}>
@@ -329,8 +326,10 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
           maxWidth: '500px',
           overflow: 'auto', 
           padding: '20px', 
-          backgroundColor: '#f8f9fa', 
-          borderLeft: '1px solid #dee2e6' 
+          backgroundColor: 'rgba(42, 42, 62, 0.6)',
+          color: '#ffffff',
+          borderLeft: '1px solid #3a3a4a',
+          backdropFilter: 'blur(10px)'
         }}>
           <ChordDebugPanel
             expectedNotes={expectedNotes}
@@ -340,6 +339,11 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             isChordComplete={isChordComplete}
             currentChord={currentChord}
           />
+
+          {/* Metronome placed below debug panel */}
+          <div style={{ marginTop: '24px' }}>
+            <Metronome initialBpm={musicData?.tempo || 120} />
+          </div>
         </div>
       )}
       
@@ -350,8 +354,10 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
           minWidth: '350px', 
           overflow: 'auto', 
           padding: '20px', 
-          backgroundColor: '#f8f9fa', 
-          borderLeft: '1px solid #dee2e6' 
+          backgroundColor: 'rgba(42, 42, 62, 0.6)',
+          color: '#ffffff',
+          borderLeft: '1px solid #3a3a4a',
+          backdropFilter: 'blur(10px)'
         }}>
           <PerformanceMetricsDisplay
             metrics={performanceMetrics}
@@ -359,6 +365,11 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             isActive={isEvaluationActive}
             expectedTempo={musicData.tempo || 120}
           />
+
+          {/* Metronome when PerformanceMetrics panel is visible */}
+          <div style={{ marginTop: '24px' }}>
+            <Metronome initialBpm={musicData?.tempo || 120} />
+          </div>
         </div>
       )}
     </div>
