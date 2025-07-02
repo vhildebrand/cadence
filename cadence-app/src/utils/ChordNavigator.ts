@@ -15,6 +15,9 @@ interface NavigationState {
   completedChords: string[];
   userInput: Set<number>; // Currently pressed MIDI numbers
   isChordComplete: boolean;
+  errorCount: number; // Number of erroneous note-on events
+  successStreak: number; // consecutive chords with zero errors
+  errorStreak: number;   // consecutive chords that had at least 1 error
 }
 
 interface ChordNavigatorOptions {
@@ -32,6 +35,9 @@ export class ChordNavigator {
   // Tracks what notes were physically held at the moment the last chord was completed
   private prevUserInput: Set<number> = new Set();
 
+  // Flag indicating whether an error has already been registered for the current chord
+  private hasErrorThisChord: boolean = false;
+
   constructor(options: ChordNavigatorOptions = {}) {
     this.options = {
       requireExactMatch: true,
@@ -44,7 +50,10 @@ export class ChordNavigator {
       currentChord: null,
       completedChords: [],
       userInput: new Set(),
-      isChordComplete: false
+      isChordComplete: false,
+      errorCount: 0,
+      successStreak: 0,
+      errorStreak: 0
     };
   }
 
@@ -190,6 +199,10 @@ export class ChordNavigator {
     this.state.completedChords = [];
     this.state.userInput.clear();
     this.state.isChordComplete = false;
+    this.state.errorCount = 0;
+    this.state.successStreak = 0;
+    this.state.errorStreak = 0;
+    this.hasErrorThisChord = false;
 
     // Analyze the breakdown of single notes vs multi-note chords
     const singleNotes = this.chords.filter(chord => chord.midiNumbers.length === 1).length;
@@ -217,6 +230,12 @@ export class ChordNavigator {
   updateMidiInput(midiNumber: number, isNoteOn: boolean): boolean {
     if (isNoteOn) {
       this.state.userInput.add(midiNumber);
+
+      // Count an error only once per chord if the pressed note is NOT part of the expected chord
+      if (!this.state.currentChord?.midiNumbers.includes(midiNumber) && !this.hasErrorThisChord) {
+        this.state.errorCount += 1;
+        this.hasErrorThisChord = true;
+      }
     } else {
       this.state.userInput.delete(midiNumber);
     }
@@ -290,6 +309,17 @@ export class ChordNavigator {
     // Snapshot which notes are physically held at this moment
     this.prevUserInput = new Set(this.state.userInput);
     
+    // Update streaks based on whether an error occurred during this chord
+    if (this.hasErrorThisChord) {
+      this.state.errorStreak += 1;
+      this.state.successStreak = 0;
+    } else {
+      this.state.successStreak += 1;
+      this.state.errorStreak = 0;
+    }
+    // Reset flag for next chord
+    this.hasErrorThisChord = false;
+    
     // Notify about completion
     if (this.options.onChordComplete) {
       this.options.onChordComplete(this.state.currentChord);
@@ -310,6 +340,7 @@ export class ChordNavigator {
       // Move to next chord
       this.state.currentChord = this.chords[this.state.currentChordIndex];
       this.state.isChordComplete = false;
+      this.hasErrorThisChord = false;
       
       if (this.options.onChordChange) {
         this.options.onChordChange(this.state.currentChord, this.state.currentChordIndex);
@@ -327,6 +358,7 @@ export class ChordNavigator {
     this.state.currentChord = this.chords[index];
     this.state.isChordComplete = false;
     this.state.userInput.clear();
+    this.hasErrorThisChord = false;
 
     if (this.options.onChordChange) {
       this.options.onChordChange(this.state.currentChord, this.state.currentChordIndex);
@@ -342,6 +374,10 @@ export class ChordNavigator {
     this.state.completedChords = [];
     this.state.userInput.clear();
     this.state.isChordComplete = false;
+    this.state.errorCount = 0;
+    this.state.successStreak = 0;
+    this.state.errorStreak = 0;
+    this.hasErrorThisChord = false;
 
     if (this.options.onChordChange && this.state.currentChord) {
       this.options.onChordChange(this.state.currentChord, this.state.currentChordIndex);
@@ -389,5 +425,19 @@ export class ChordNavigator {
    */
   isComplete(): boolean {
     return this.state.currentChord === null && this.state.currentChordIndex >= this.chords.length;
+  }
+
+  /**
+   * Get total errors recorded so far
+   */
+  getErrorCount(): number {
+    return this.state.errorCount;
+  }
+
+  /**
+   * Get current streaks
+   */
+  getStreaks(): { successStreak: number; errorStreak: number } {
+    return { successStreak: this.state.successStreak, errorStreak: this.state.errorStreak };
   }
 } 

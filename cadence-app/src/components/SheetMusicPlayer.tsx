@@ -50,6 +50,9 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
   const [isChordComplete, setIsChordComplete] = useState(false);
   const [currentChord, setCurrentChord] = useState<any>(null);
   const [showDebugPanel, setShowDebugPanel] = useState(true);
+  const [errorCount, setErrorCount] = useState(0);
+  const [successStreak, setSuccessStreak] = useState(0);
+  const [errorStreak, setErrorStreak] = useState(0);
   
   // Refs
   const chordNavigatorRef = useRef<ChordNavigator | null>(null);
@@ -117,6 +120,9 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
       setCurrentChordIndex(state.currentChordIndex);
       setCurrentChord(state.currentChord);
       setExpectedNotes(state.currentChord?.midiNumbers || []);
+      setErrorCount(state.errorCount);
+      setSuccessStreak(state.successStreak);
+      setErrorStreak(state.errorStreak);
       
       // Initialize performance evaluator
       evaluatorRef.current = new PerformanceEvaluator(musicData.tempo || 120);
@@ -165,6 +171,9 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
         setCurrentChord(state.currentChord);
         setExpectedNotes(state.currentChord?.midiNumbers || []);
         setIsChordComplete(state.isChordComplete);
+        setErrorCount(state.errorCount);
+        setSuccessStreak(state.successStreak);
+        setErrorStreak(state.errorStreak);
       }
     }
 
@@ -226,6 +235,9 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
         osmdViewerRef.current.moveCursorToChord(0);
       }
     }
+    setErrorCount(0);
+    setSuccessStreak(0);
+    setErrorStreak(0);
   }, [isNavigationActive]);
 
   // Seek to specific chord
@@ -338,6 +350,9 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             totalChords={totalChords}
             isChordComplete={isChordComplete}
             currentChord={currentChord}
+            errorCount={errorCount}
+            successStreak={successStreak}
+            errorStreak={errorStreak}
           />
 
           {/* Metronome placed below debug panel */}

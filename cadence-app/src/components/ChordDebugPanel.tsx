@@ -12,6 +12,9 @@ interface ChordDebugPanelProps {
     keys: string[];
     duration: string;
   } | null;
+  errorCount: number;
+  successStreak: number;
+  errorStreak: number;
 }
 
 // Helper function to convert MIDI number to note name
@@ -44,7 +47,10 @@ export default function ChordDebugPanel({
   currentChordIndex,
   totalChords,
   isChordComplete,
-  currentChord
+  currentChord,
+  errorCount,
+  successStreak,
+  errorStreak
 }: ChordDebugPanelProps) {
   // Combine all notes for display (expected + pressed)
   const allRelevantNotes = useMemo(() => {
@@ -53,22 +59,30 @@ export default function ChordDebugPanel({
   }, [expectedNotes, userInput]);
 
   // Statistics
-  const correctNotes = expectedNotes.filter(note => userInput.includes(note)).length;
-  const extraNotes = userInput.filter(note => !expectedNotes.includes(note)).length;
-  const missingNotes = expectedNotes.filter(note => !userInput.includes(note)).length;
+  const { correctNotes, extraNotes, missingNotes } = useMemo(() => {
+    // Memoize stats
+    return {
+      correctNotes: expectedNotes.filter(note => userInput.includes(note)).length,
+      extraNotes: userInput.filter(note => !expectedNotes.includes(note)).length,
+      missingNotes: expectedNotes.filter(note => !userInput.includes(note)).length
+    };
+  }, [expectedNotes, userInput]);
 
   return (
     <div style={{
-      padding: '15px',
-      backgroundColor: '#f8f9fa',
-      border: '1px solid #dee2e6',
-      borderRadius: '8px',
+      padding: '20px',
+      background: 'rgba(42, 42, 62, 0.8)',
+      border: '1px solid #3a3a4a',
+      borderRadius: '16px',
+      backdropFilter: 'blur(10px)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
       fontFamily: 'monospace',
-      fontSize: '14px'
+      fontSize: '14px',
+      color: '#e4e4f4'
     }}>
       <h3 style={{ 
         margin: '0 0 15px 0', 
-        color: '#495057',
+        color: '#ffffff',
         fontFamily: 'inherit'
       }}>
         🎹 {expectedNotes.length === 1 ? 'Note' : 'Chord'} Debug Panel
@@ -77,10 +91,10 @@ export default function ChordDebugPanel({
       {/* Progress Info */}
       <div style={{
         marginBottom: '15px',
-        padding: '10px',
-        backgroundColor: 'white',
-        borderRadius: '6px',
-        border: '1px solid #dee2e6'
+        padding: '12px',
+        background: 'rgba(255,255,255,0.05)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div style={{ 
           display: 'flex', 
@@ -119,12 +133,12 @@ export default function ChordDebugPanel({
       }}>
         {/* Expected Notes */}
         <div style={{
-          padding: '10px',
-          backgroundColor: 'white',
-          borderRadius: '6px',
-          border: '1px solid #dee2e6'
+          padding: '12px',
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: '12px',
+          border: '1px solid rgba(255,255,255,0.1)'
         }}>
-          <h4 style={{ margin: '0 0 8px 0', color: '#495057' }}>Expected ({expectedNotes.length})</h4>
+          <h4 style={{ margin: '0 0 8px 0', color: '#e4e4f4' }}>Expected ({expectedNotes.length})</h4>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
             {expectedNotes.length > 0 ? (
               expectedNotes.map(note => (
@@ -132,7 +146,7 @@ export default function ChordDebugPanel({
                   key={note}
                   style={{
                     padding: '4px 8px',
-                    backgroundColor: userInput.includes(note) ? '#28a745' : '#ffc107',
+                    backgroundColor: userInput.includes(note) ? '#22c55e' : '#eab308',
                     color: 'white',
                     borderRadius: '4px',
                     fontSize: '12px',
@@ -150,12 +164,12 @@ export default function ChordDebugPanel({
 
         {/* User Input */}
         <div style={{
-          padding: '10px',
-          backgroundColor: 'white',
-          borderRadius: '6px',
-          border: '1px solid #dee2e6'
+          padding: '12px',
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: '12px',
+          border: '1px solid rgba(255,255,255,0.1)'
         }}>
-          <h4 style={{ margin: '0 0 8px 0', color: '#495057' }}>Pressed ({userInput.length})</h4>
+          <h4 style={{ margin: '0 0 8px 0', color: '#e4e4f4' }}>Pressed ({userInput.length})</h4>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
             {userInput.length > 0 ? (
               userInput.map(note => (
@@ -163,7 +177,7 @@ export default function ChordDebugPanel({
                   key={note}
                   style={{
                     padding: '4px 8px',
-                    backgroundColor: expectedNotes.includes(note) ? '#28a745' : '#dc3545',
+                    backgroundColor: expectedNotes.includes(note) ? '#22c55e' : '#ef4444',
                     color: 'white',
                     borderRadius: '4px',
                     fontSize: '12px',
@@ -182,13 +196,13 @@ export default function ChordDebugPanel({
 
       {/* Statistics */}
       <div style={{
-        padding: '10px',
-        backgroundColor: 'white',
-        borderRadius: '6px',
-        border: '1px solid #dee2e6',
+        padding: '12px',
+        background: 'rgba(255,255,255,0.05)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255,255,255,0.1)',
         marginBottom: '15px'
       }}>
-        <h4 style={{ margin: '0 0 8px 0', color: '#495057' }}>Statistics</h4>
+        <h4 style={{ margin: '0 0 8px 0', color: '#e4e4f4' }}>Statistics</h4>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
@@ -198,9 +212,9 @@ export default function ChordDebugPanel({
           <div style={{
             textAlign: 'center',
             padding: '8px',
-            backgroundColor: '#d4edda',
-            borderRadius: '4px',
-            color: '#155724'
+            backgroundColor: 'rgba(34,197,94,0.2)',
+            borderRadius: '8px',
+            color: '#4ade80'
           }}>
             <div style={{ fontWeight: 'bold' }}>{correctNotes}</div>
             <div>Correct</div>
@@ -208,9 +222,9 @@ export default function ChordDebugPanel({
           <div style={{
             textAlign: 'center',
             padding: '8px',
-            backgroundColor: '#f8d7da',
-            borderRadius: '4px',
-            color: '#721c24'
+            backgroundColor: 'rgba(239,68,68,0.2)',
+            borderRadius: '8px',
+            color: '#f87171'
           }}>
             <div style={{ fontWeight: 'bold' }}>{extraNotes}</div>
             <div>Extra</div>
@@ -218,24 +232,54 @@ export default function ChordDebugPanel({
           <div style={{
             textAlign: 'center',
             padding: '8px',
-            backgroundColor: '#fff3cd',
-            borderRadius: '4px',
-            color: '#856404'
+            backgroundColor: 'rgba(234,179,8,0.2)',
+            borderRadius: '8px',
+            color: '#fde047'
           }}>
             <div style={{ fontWeight: 'bold' }}>{missingNotes}</div>
             <div>Missing</div>
+          </div>
+          <div style={{
+            textAlign: 'center',
+            padding: '8px',
+            backgroundColor: 'rgba(59,130,246,0.2)',
+            borderRadius: '8px',
+            color: '#60a5fa'
+          }}>
+            <div style={{ fontWeight: 'bold' }}>{errorCount}</div>
+            <div>Errors</div>
+          </div>
+          <div style={{
+            textAlign: 'center',
+            padding: '8px',
+            backgroundColor: 'rgba(16,185,129,0.2)',
+            borderRadius: '8px',
+            color: '#34d399'
+          }}>
+            <div style={{ fontWeight: 'bold' }}>{successStreak}</div>
+            <div>Streak ✅</div>
+          </div>
+          <div style={{
+            textAlign: 'center',
+            padding: '8px',
+            backgroundColor: 'rgba(239,68,68,0.3)',
+            borderRadius: '8px',
+            color: '#f87171'
+          }}>
+            <div style={{ fontWeight: 'bold' }}>{errorStreak}</div>
+            <div>Streak ❌</div>
           </div>
         </div>
       </div>
 
       {/* Visual Piano Roll */}
       <div style={{
-        padding: '10px',
-        backgroundColor: 'white',
-        borderRadius: '6px',
-        border: '1px solid #dee2e6'
+        padding: '12px',
+        background: 'rgba(255,255,255,0.05)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255,255,255,0.1)'
       }}>
-        <h4 style={{ margin: '0 0 8px 0', color: '#495057' }}>Visual Notes</h4>
+        <h4 style={{ margin: '0 0 8px 0', color: '#e4e4f4' }}>Visual Notes</h4>
         <div style={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -255,7 +299,7 @@ export default function ChordDebugPanel({
                   width: '40px',
                   height: '30px',
                   backgroundColor: color,
-                  border: '1px solid #333',
+                  border: '1px solid rgba(0,0,0,0.6)',
                   borderRadius: '4px',
                   display: 'flex',
                   alignItems: 'center',
