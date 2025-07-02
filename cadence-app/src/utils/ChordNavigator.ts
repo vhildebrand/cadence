@@ -29,6 +29,9 @@ export class ChordNavigator {
   private state: NavigationState;
   private options: ChordNavigatorOptions;
 
+  // Tracks what notes were physically held at the moment the last chord was completed
+  private prevUserInput: Set<number> = new Set();
+
   constructor(options: ChordNavigatorOptions = {}) {
     this.options = {
       requireExactMatch: true,
@@ -244,11 +247,14 @@ export class ChordNavigator {
     for (let i = 0; i < this.state.currentChordIndex; i++) {
       const prevChord = this.chords[i];
       if (!prevChord) continue;
-      // Only consider hold-over if in the same measure to avoid incorrect carry-over when
-      // measure startTime values reset (MusicXML offsets are per-measure).
-      if (prevChord.measureNumber === this.state.currentChord!.measureNumber &&
-          prevChord.endTimeQuarters > currentStart) {
-        prevChord.midiNumbers.forEach(n => held.add(n));
+      // Only consider hold-over if in the same measure AND the note is still physically held
+      if (
+        prevChord.measureNumber === this.state.currentChord!.measureNumber &&
+        prevChord.endTimeQuarters > currentStart
+      ) {
+        prevChord.midiNumbers.forEach(n => {
+          if (this.prevUserInput.has(n)) held.add(n);
+        });
       }
     }
 
@@ -261,32 +267,15 @@ export class ChordNavigator {
   private checkChordComplete(): boolean {
     if (!this.state.currentChord) return false;
 
-    // Notes that start at this chord
-    const currentChordNotes = new Set(this.state.currentChord.midiNumbers);
-    // Notes that should still be held from previous chords
-    const heldNotes = this.getHeldNotesForCurrent();
-
-    // Required notes are union of held + current chord notes
-    const requiredNotes = new Set<number>([...heldNotes, ...currentChordNotes]);
+    // Required notes are ONLY the notes that start at this chord
+    const requiredNotes = new Set<number>(this.state.currentChord.midiNumbers);
     const userNotes = this.state.userInput;
 
     // Must have all required notes pressed
     const hasAllRequired = Array.from(requiredNotes).every(n => userNotes.has(n));
 
-    if (!hasAllRequired) return false;
-
-    if (this.options.requireExactMatch) {
-      // Allow overlap: notes that belonged to the immediately previous chord (grace overlap)
-      const toleratedExtra = new Set<number>();
-      if (this.state.currentChordIndex > 0) {
-        this.chords[this.state.currentChordIndex - 1].midiNumbers.forEach(n => toleratedExtra.add(n));
-      }
-
-      const hasOnlyAllowed = Array.from(userNotes).every(n => requiredNotes.has(n) || toleratedExtra.has(n));
-      return hasOnlyAllowed;
-    }
-
-    return true;
+    // We no longer block on extra notes; as long as all required are pressed, chord is complete.
+    return hasAllRequired;
   }
 
   /**
@@ -297,6 +286,9 @@ export class ChordNavigator {
 
     // Mark chord as completed
     this.state.completedChords.push(this.state.currentChord.id);
+    
+    // Snapshot which notes are physically held at this moment
+    this.prevUserInput = new Set(this.state.userInput);
     
     // Notify about completion
     if (this.options.onChordComplete) {
