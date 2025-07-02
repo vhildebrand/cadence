@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
 import { PythonShell } from 'python-shell';
+import fs from 'fs';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -335,5 +336,21 @@ ipcMain.handle('run-cadence-graph', async (event, command: string, args?: string
       reject(err);
     });
   });
+});
+
+// New: read raw MusicXML file contents and return as string
+ipcMain.handle('read-musicxml-file', async (event, filePath: string) => {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.mxl' || ext === '.zip') {
+      const buffer = fs.readFileSync(filePath);
+      return { success: true, data: buffer.toString('base64'), isBinary: true };
+    } else {
+      const text = fs.readFileSync(filePath, 'utf8');
+      return { success: true, data: text, isBinary: false };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 });
   

@@ -85,6 +85,8 @@ function App() {
 
   // State for sheet music file loading (moved from SheetMusicPlayer)
   const [musicData, setMusicData] = useState<SheetMusicData | null>(null);
+  const [musicXml, setMusicXml] = useState<string | null>(null);
+  const [musicXmlIsBinary, setMusicXmlIsBinary] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -233,7 +235,15 @@ function App() {
         throw new Error(parseResult.error || 'Failed to parse MusicXML file');
       }
       
+      // Also load raw XML for OpenSheetMusicDisplay
+      const xmlResult = await (window as any).electronAPI.readMusicXMLFile(fileResult.filePath);
+      if (!xmlResult.success) {
+        throw new Error(xmlResult.error || 'Failed to read MusicXML file');
+      }
+      
       setMusicData(parseResult.data);
+      setMusicXml(xmlResult.data);
+      setMusicXmlIsBinary(!!xmlResult.isBinary);
       console.log('Sheet music loaded:', parseResult.data);
       
     } catch (error) {
@@ -473,7 +483,9 @@ function App() {
         <SheetMusicPlayer 
           activeMidiNotes={activeMidiNotes}
           onMidiMessage={handleMIDIMessage}
-          musicData={musicData} // Pass the loaded data as a prop
+          musicData={musicData} // Structured data for evaluation & cursor
+          musicXml={musicXml}   // Raw XML/base64 for OSMD renderer
+          musicXmlIsBinary={musicXmlIsBinary}
         />
       </div>
     );

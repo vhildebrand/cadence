@@ -7,6 +7,7 @@ export const electronAPI = {
   selectMusicXMLFile: () => ipcRenderer.invoke('select-musicxml-file'),
   parseMusicXML: (filePath: string) => ipcRenderer.invoke('parse-musicxml', filePath),
   parseSheetMusic: (filePath: string) => ipcRenderer.invoke('parse-sheet-music', filePath),
+  readMusicXMLFile: (filePath: string) => ipcRenderer.invoke('read-musicxml-file', filePath),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

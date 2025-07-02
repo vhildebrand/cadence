@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
 const python_shell_1 = require("python-shell");
+const fs_1 = __importDefault(require("fs"));
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
     electron_1.app.quit();
@@ -301,4 +302,21 @@ electron_1.ipcMain.handle('run-cadence-graph', async (event, command, args) => {
             reject(err);
         });
     });
+});
+// New: read raw MusicXML file contents and return as string
+electron_1.ipcMain.handle('read-musicxml-file', async (event, filePath) => {
+    try {
+        const ext = path_1.default.extname(filePath).toLowerCase();
+        if (ext === '.mxl' || ext === '.zip') {
+            const buffer = fs_1.default.readFileSync(filePath);
+            return { success: true, data: buffer.toString('base64'), isBinary: true };
+        }
+        else {
+            const text = fs_1.default.readFileSync(filePath, 'utf8');
+            return { success: true, data: text, isBinary: false };
+        }
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
 });

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import SheetMusicRenderer from './SheetMusicRenderer';
+import OsmdViewer from './OsmdViewer';
 import PerformanceMetricsDisplay from './PerformanceMetricsDisplay';
 import { usePlaybackCursor } from '../utils/usePlaybackCursor';
 import { PerformanceEvaluator } from '../utils/PerformanceEvaluator';
@@ -38,10 +38,12 @@ interface NoteHighlight {
 interface SheetMusicPlayerProps {
   activeMidiNotes: Map<number, { velocity: number; timestamp: number }>;
   onMidiMessage: (note: number, isNoteOn: boolean) => void;
-  musicData: SheetMusicData | null; // Receives music data as a prop
+  musicData: SheetMusicData | null; // structured data for evaluation
+  musicXml: string | null;          // raw MusicXML (or base64) for rendering with OSMD
+  musicXmlIsBinary?: boolean;      // whether the xml content is base64-encoded binary
 }
 
-export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, musicData }: SheetMusicPlayerProps) {
+export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, musicData, musicXml, musicXmlIsBinary }: SheetMusicPlayerProps) {
   const [highlightedNotes, setHighlightedNotes] = useState<NoteHighlight[]>([]);
   const [zoom, setZoom] = useState(1.0);
   
@@ -213,12 +215,10 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             </div>
           )}
 
-          <SheetMusicRenderer
-            musicData={musicData}
-            currentPositionQuarters={playback.currentPositionQuarters}
-            highlightedNotes={highlightedNotes}
+          <OsmdViewer
+            musicXml={musicXml}
             zoom={zoom}
-            isPlaying={playback.isPlaying}
+            isBinary={musicXmlIsBinary}
           />
         </div>
         
