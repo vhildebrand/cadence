@@ -5,10 +5,12 @@ import { ScalePerformanceTracker } from '../utils/ScalePerformanceTracker';
 import type { ScaleUserProfile, ScalePerformance, ScalePerformanceSession } from '../utils/ScalePerformanceTracker';
 import { EarTrainingStatsManager } from '../utils/EarTrainingStats';
 import type { EarTrainingStats } from '../utils/EarTrainingStats';
+import { LessonPlannerTracker } from '../utils/LessonPlannerTracker';
 
 interface ProfileProps {
   performanceTracker: PerformanceTracker;
   scalePerformanceTracker?: ScalePerformanceTracker;
+  lessonPlannerTracker?: LessonPlannerTracker;
 }
 
 // Line chart component for trends
@@ -301,12 +303,13 @@ const SessionCard = ({ session }: { session: PerformanceSession }) => (
   </div>
 );
 
-export default function Profile({ performanceTracker, scalePerformanceTracker }: ProfileProps) {
+export default function Profile({ performanceTracker, scalePerformanceTracker, lessonPlannerTracker }: ProfileProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [scaleProfile, setScaleProfile] = useState<ScaleUserProfile | null>(null);
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'pieces' | 'recent' | 'ear-training' | 'scales'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pieces' | 'recent' | 'ear-training' | 'scales' | 'lessons'>('overview');
   const [earTrainingStats, setEarTrainingStats] = useState<EarTrainingStats>(EarTrainingStatsManager.getStats());
+  const [lessonStats, setLessonStats] = useState(lessonPlannerTracker?.getStatistics() || null);
 
   // Load profile data and subscribe to changes
   useEffect(() => {
@@ -346,6 +349,21 @@ export default function Profile({ performanceTracker, scalePerformanceTracker }:
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  // Load lesson planner stats
+  useEffect(() => {
+    if (lessonPlannerTracker) {
+      setLessonStats(lessonPlannerTracker.getStatistics());
+      
+      const listener = () => {
+        setLessonStats(lessonPlannerTracker.getStatistics());
+      };
+      
+      lessonPlannerTracker.addListener(listener);
+
+      return () => lessonPlannerTracker.removeListener(listener);
+    }
+  }, [lessonPlannerTracker]);
 
   // Get selected piece performance
   const selectedPiecePerformance = useMemo(() => {
@@ -524,6 +542,23 @@ export default function Profile({ performanceTracker, scalePerformanceTracker }:
             }}
           >
             Scale Practice ({scaleProfile?.totalSessions || 0})
+          </button>
+        )}
+        {lessonPlannerTracker && (
+          <button
+            onClick={() => setActiveTab('lessons')}
+            style={{
+              padding: '8px 16px',
+              background: activeTab === 'lessons' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+              border: 'none',
+              borderRadius: '8px',
+              color: activeTab === 'lessons' ? '#ffffff' : '#e4e4f4',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            Lessons ({lessonStats?.totalLessons || 0})
           </button>
         )}
       </div>
@@ -1285,6 +1320,254 @@ export default function Profile({ performanceTracker, scalePerformanceTracker }:
               }}
             >
               Clear Ear Training Data
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lessons Tab */}
+      {activeTab === 'lessons' && lessonStats && (
+        <div>
+          {/* Lesson Overview Stats */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            <StatCard
+              title="Total Lessons"
+              value={lessonStats.totalLessons}
+              color="#3b82f6"
+            />
+            <StatCard
+              title="Completed Lessons"
+              value={lessonStats.completedLessons}
+              subtitle={`${((lessonStats.completedLessons / Math.max(lessonStats.totalLessons, 1)) * 100).toFixed(1)}% completion rate`}
+              color="#22c55e"
+            />
+            <StatCard
+              title="Total Practice Time"
+              value={formatDuration(lessonStats.totalLessonTime)}
+              color="#f59e0b"
+            />
+            <StatCard
+              title="Average Rating"
+              value={lessonStats.averageRating > 0 ? `${lessonStats.averageRating.toFixed(1)}/5 ⭐` : 'No ratings yet'}
+              color="#8b5cf6"
+            />
+          </div>
+
+          {/* Lesson Streaks and Activity */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            <StatCard
+              title="Current Streak"
+              value={`${lessonStats.currentStreak} days`}
+              color="#10b981"
+            />
+            <StatCard
+              title="Longest Streak"
+              value={`${lessonStats.longestStreak} days`}
+              color="#059669"
+            />
+            <StatCard
+              title="This Week"
+              value={`${lessonStats.lessonsThisWeek} lessons`}
+              color="#6366f1"
+            />
+            <StatCard
+              title="This Month"
+              value={`${lessonStats.lessonsThisMonth} lessons`}
+              color="#8b5cf6"
+            />
+          </div>
+
+          {/* Favorite Activity Type */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            marginBottom: '24px'
+          }}>
+            <h4 style={{ 
+              margin: '0 0 16px 0', 
+              color: '#ffffff',
+              fontSize: '16px',
+              fontWeight: '600'
+            }}>
+              Practice Insights
+            </h4>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '16px'
+            }}>
+              <div style={{
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '8px',
+                padding: '16px',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <h5 style={{ 
+                  margin: '0 0 8px 0', 
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}>
+                  Favorite Activity Type
+                </h5>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#e4e4f4',
+                  fontSize: '16px'
+                }}>
+                  <span>
+                    {lessonStats.favoriteActivityType === 'scale' && '🎹'}
+                    {lessonStats.favoriteActivityType === 'piece' && '🎼'}
+                    {lessonStats.favoriteActivityType === 'ear-training' && '👂'}
+                    {lessonStats.favoriteActivityType === 'custom' && '📝'}
+                  </span>
+                  <span style={{ textTransform: 'capitalize' }}>
+                    {lessonStats.favoriteActivityType.replace('-', ' ')}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '8px',
+                padding: '16px',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <h5 style={{ 
+                  margin: '0 0 8px 0', 
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}>
+                  Average Lesson Duration
+                </h5>
+                <div style={{
+                  color: '#e4e4f4',
+                  fontSize: '16px'
+                }}>
+                  {formatDuration(lessonStats.averageLessonDuration)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Lesson History */}
+          {lessonPlannerTracker && (
+            <div style={{
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '12px',
+              padding: '20px',
+              border: '1px solid rgba(255,255,255,0.1)',
+              marginBottom: '24px'
+            }}>
+              <h4 style={{ 
+                margin: '0 0 16px 0', 
+                color: '#ffffff',
+                fontSize: '16px',
+                fontWeight: '600'
+              }}>
+                Recent Lessons
+              </h4>
+              {lessonPlannerTracker.getLessonHistory(5).length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '20px',
+                  color: '#6c757d'
+                }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>📚</div>
+                  <div>No lessons completed yet</div>
+                  <div style={{ fontSize: '12px', marginTop: '8px' }}>
+                    Start a lesson to see your progress here
+                  </div>
+                </div>
+              ) : (
+                <div style={{ maxHeight: '300px', overflow: 'auto' }}>
+                  {lessonPlannerTracker.getLessonHistory(5).map(session => (
+                    <div key={session.id} style={{
+                      padding: '12px',
+                      background: 'rgba(255,255,255,0.05)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: '500', color: '#ffffff' }}>
+                          {session.lessonTitle}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                          {new Date(session.startTime).toLocaleDateString()} • {formatDuration(session.duration)}
+                        </div>
+                        {session.notes && (
+                          <div style={{ fontSize: '12px', color: '#a0a0b0', fontStyle: 'italic', marginTop: '4px' }}>
+                            "{session.notes}"
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          background: session.completed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(249, 115, 22, 0.2)',
+                          color: session.completed ? '#22c55e' : '#f97316',
+                          marginBottom: '4px'
+                        }}>
+                          {session.completed ? '✅ Completed' : '⏸️ Partial'}
+                        </div>
+                        {session.overallRating && (
+                          <div style={{ fontSize: '12px', color: '#fbbf24' }}>
+                            {'⭐'.repeat(session.overallRating)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Clear Lesson Data Button */}
+          <div style={{
+            textAlign: 'center',
+            marginBottom: '24px'
+          }}>
+            <button
+              onClick={() => {
+                if (confirm('Are you sure you want to clear all lesson data? This cannot be undone.')) {
+                  lessonPlannerTracker?.clearAllData();
+                  setLessonStats(lessonPlannerTracker?.getStatistics() || null);
+                }
+              }}
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                color: '#fca5a5',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              Clear Lesson Data
             </button>
           </div>
         </div>

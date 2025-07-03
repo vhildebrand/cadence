@@ -10,6 +10,7 @@ import { ToastContainer } from './components/Toast'
 import { PerformanceTracker } from './utils/PerformanceTracker'
 import { ScalePerformanceTracker } from './utils/ScalePerformanceTracker'
 import ScalePractice from './components/ScalePractice'
+import LessonPlanner from './components/LessonPlanner'
 
 // Define the MIDI message type
 interface MidiMessage {
@@ -62,10 +63,10 @@ interface SheetMusicData {
   };
 }
 
-type AppMode = 'interval-drill' | 'note-fall' | 'sheet-music' | 'profile' | 'ear-training' | 'scale-practice';
+type AppMode = 'lesson-planner' | 'interval-drill' | 'note-fall' | 'sheet-music' | 'profile' | 'ear-training' | 'scale-practice';
 
 function App() {
-  const [currentMode, setCurrentMode] = useState<AppMode>('sheet-music');
+  const [currentMode, setCurrentMode] = useState<AppMode>('lesson-planner');
   const [midiMessage, setMidiMessage] = useState<MidiMessage | null>(null);
   const [midiHistory, setMidiHistory] = useState<MidiMessage[]>([]);
   const [activeMidiNotes, setActiveMidiNotes] = useState<Map<number, ActiveNote>>(new Map());
@@ -447,6 +448,102 @@ function App() {
     console.log(`NoteFall MIDI: ${isNoteOn ? 'On' : 'Off'} - ${noteNumberToName(note)}`);
   };
 
+  // Handle lesson activity start
+  const handleLessonActivityStart = (activity: any) => {
+    // Switch to the appropriate mode based on activity type
+    switch (activity.type) {
+      case 'scale':
+        setCurrentMode('scale-practice');
+        break;
+      case 'ear-training':
+        setCurrentMode('ear-training');
+        break;
+      case 'piece':
+        setCurrentMode('sheet-music');
+        break;
+      default:
+        // For custom activities, stay in lesson planner
+        break;
+    }
+  };
+
+  const handleLessonActivityComplete = (activityId: string, metrics: any) => {
+    // Handle activity completion - could update performance trackers here
+    console.log('Activity completed:', activityId, metrics);
+  };
+
+  // Lesson Planner mode
+  if (currentMode === 'lesson-planner') {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <div className="header-content">
+            <h1>🎹 Cadence</h1>
+            <nav className="mode-nav">
+              <button 
+                onClick={() => setCurrentMode('lesson-planner')}
+                className="button primary"
+              >
+                Lesson Planner
+              </button>
+              <button 
+                onClick={() => setCurrentMode('interval-drill')}
+                className="button secondary"
+              >
+                Interval Drill
+              </button>
+              <button 
+                onClick={() => setCurrentMode('note-fall')}
+                className="button secondary"
+              >
+                Note Fall
+              </button>
+              <button 
+                onClick={() => setCurrentMode('sheet-music')}
+                className="button secondary"
+              >
+                Sheet Music
+              </button>
+              <button 
+                onClick={() => setCurrentMode('scale-practice')}
+                className="button secondary"
+              >
+                Scale Practice
+              </button>
+              <button 
+                onClick={() => setCurrentMode('ear-training')}
+                className="button secondary"
+              >
+                Ear Training
+              </button>
+              <button 
+                onClick={() => setCurrentMode('profile')}
+                className="button secondary"
+              >
+                Profile
+              </button>
+            </nav>
+          </div>
+          <div className="midi-status-compact">
+            <span className={`status-dot ${connectedDevices.length > 0 ? 'connected' : 'disconnected'}`}></span>
+            {connectedDevices.length > 0 ? `${connectedDevices.length} MIDI device(s)` : 'No MIDI'}
+          </div>
+        </header>
+
+        <div style={{ 
+          flex: 1, 
+          overflow: 'hidden', 
+          height: '100%'
+        }}>
+          <LessonPlanner
+            onStartActivity={handleLessonActivityStart}
+            onActivityComplete={handleLessonActivityComplete}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // If we're in NoteFall mode, render the NoteFall component
   if (currentMode === 'note-fall') {
     return (
@@ -456,6 +553,12 @@ function App() {
             <h1>🎹 Cadence</h1>
                       <nav className="mode-nav">
             <button 
+              onClick={() => setCurrentMode('lesson-planner')}
+              className="button secondary"
+            >
+              Lesson Planner
+            </button>
+            <button 
               onClick={() => setCurrentMode('interval-drill')}
               className="button secondary"
             >
@@ -463,7 +566,7 @@ function App() {
             </button>
             <button 
               onClick={() => setCurrentMode('note-fall')}
-              className={currentMode === 'note-fall' ? 'button primary' : 'button secondary'}
+              className="button primary"
             >
               Note Fall
             </button>
@@ -537,6 +640,7 @@ function App() {
           <div className="header-content">
             <h1>🎹 Cadence</h1>
             <nav className="mode-nav">
+              <button onClick={() => setCurrentMode('lesson-planner')} className="button secondary">Lesson Planner</button>
               <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
               <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
               <button onClick={() => setCurrentMode('sheet-music')} className="button primary">Sheet Music</button>
@@ -592,6 +696,7 @@ function App() {
           <div className="header-content">
             <h1>🎹 Cadence</h1>
             <nav className="mode-nav">
+              <button onClick={() => setCurrentMode('lesson-planner')} className="button secondary">Lesson Planner</button>
               <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
               <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
               <button onClick={() => setCurrentMode('sheet-music')} className="button secondary">Sheet Music</button>
@@ -626,6 +731,7 @@ function App() {
           <div className="header-content">
             <h1>🎹 Cadence</h1>
             <nav className="mode-nav">
+              <button onClick={() => setCurrentMode('lesson-planner')} className="button secondary">Lesson Planner</button>
               <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
               <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
               <button onClick={() => setCurrentMode('sheet-music')} className="button secondary">Sheet Music</button>
@@ -662,6 +768,7 @@ function App() {
           <div className="header-content">
             <h1>🎹 Cadence</h1>
             <nav className="mode-nav">
+              <button onClick={() => setCurrentMode('lesson-planner')} className="button secondary">Lesson Planner</button>
               <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
               <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
               <button onClick={() => setCurrentMode('sheet-music')} className="button secondary">Sheet Music</button>
@@ -699,14 +806,20 @@ function App() {
           <h1>🎹 Cadence</h1>
           <nav className="mode-nav">
             <button 
+              onClick={() => setCurrentMode('lesson-planner')}
+              className="button secondary"
+            >
+              Lesson Planner
+            </button>
+            <button 
               onClick={() => setCurrentMode('interval-drill')}
-              className={currentMode === 'interval-drill' ? 'button primary' : 'button secondary'}
+              className="button secondary"
             >
               Interval Drill
             </button>
             <button 
               onClick={() => setCurrentMode('note-fall')}
-              className="button secondary"
+              className="button primary"
             >
               Note Fall
             </button>
