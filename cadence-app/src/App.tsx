@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import './App.css'
 import NoteFall from './components/NoteFall'
 import SheetMusicPlayer from './components/SheetMusicPlayer'
+import Profile from './components/Profile'
+import { PerformanceTracker } from './utils/PerformanceTracker'
 
 // Define the MIDI message type
 interface MidiMessage {
@@ -54,7 +56,7 @@ interface SheetMusicData {
   };
 }
 
-type AppMode = 'interval-drill' | 'note-fall' | 'sheet-music';
+type AppMode = 'interval-drill' | 'note-fall' | 'sheet-music' | 'profile';
 
 function App() {
   const [currentMode, setCurrentMode] = useState<AppMode>('sheet-music');
@@ -64,6 +66,9 @@ function App() {
   const [midiAccess, setMidiAccess] = useState<any>(null);
   const [midiStatus, setMidiStatus] = useState<string>('Not connected');
   const [connectedDevices, setConnectedDevices] = useState<string[]>([]);
+  
+  // Performance tracker instance
+  const performanceTracker = useMemo(() => new PerformanceTracker(), []);
   
   // Note Fall configuration
   const [noteRange, setNoteRange] = useState({
@@ -398,9 +403,15 @@ function App() {
             </button>
             <button 
               onClick={() => setCurrentMode('sheet-music')}
-              className={currentMode === 'sheet-music' ? 'button primary' : 'button secondary'}
+              className="button secondary"
             >
               Sheet Music
+            </button>
+            <button 
+              onClick={() => setCurrentMode('profile')}
+              className="button secondary"
+            >
+              Profile
             </button>
           </nav>
             <div className="note-range-controls">
@@ -451,6 +462,7 @@ function App() {
               <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
               <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
               <button onClick={() => setCurrentMode('sheet-music')} className="button primary">Sheet Music</button>
+              <button onClick={() => setCurrentMode('profile')} className="button secondary">Profile</button>
             </nav>
             {/* ADDED FILE CONTROLS TO THE MAIN HEADER */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -486,7 +498,40 @@ function App() {
           musicData={musicData} // Structured data for evaluation & cursor
           musicXml={musicXml}   // Raw XML/base64 for OSMD renderer
           musicXmlIsBinary={musicXmlIsBinary}
+          performanceTracker={performanceTracker}
         />
+      </div>
+    );
+  }
+
+  // Profile mode
+  if (currentMode === 'profile') {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <div className="header-content">
+            <h1>🎹 Cadence</h1>
+            <nav className="mode-nav">
+              <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
+              <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
+              <button onClick={() => setCurrentMode('sheet-music')} className="button secondary">Sheet Music</button>
+              <button onClick={() => setCurrentMode('profile')} className="button primary">Profile</button>
+            </nav>
+          </div>
+          <div className="midi-status-compact">
+            <span className={`status-dot ${connectedDevices.length > 0 ? 'connected' : 'disconnected'}`}></span>
+            {connectedDevices.length > 0 ? `${connectedDevices.length} MIDI device(s)` : 'No MIDI'}
+          </div>
+        </header>
+
+        <div style={{ 
+          flex: 1, 
+          overflow: 'hidden', 
+          height: '100%',
+          padding: '20px'
+        }}>
+          <Profile performanceTracker={performanceTracker} />
+        </div>
       </div>
     );
   }
@@ -515,6 +560,12 @@ function App() {
               className="button secondary"
             >
               Sheet Music
+            </button>
+            <button 
+              onClick={() => setCurrentMode('profile')}
+              className="button secondary"
+            >
+              Profile
             </button>
           </nav>
         </div>

@@ -30,11 +30,12 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
   ({ musicXml, zoom = 1.0, isBinary = false, currentChordIndex = 0, showCursor = false }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const osmdRef = useRef<OSMD | null>(null);
+    const isLoadedRef = useRef<boolean>(false);
 
     // Expose methods to parent component
     useImperativeHandle(ref, () => ({
       moveCursorToChord: (chordIndex: number) => {
-        if (!osmdRef.current || !osmdRef.current.cursor) return;
+        if (!osmdRef.current || !osmdRef.current.cursor || !isLoadedRef.current) return;
         
         try {
           // First, reset cursor to the beginning of the piece
@@ -106,19 +107,19 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
       },
       
       showCursor: () => {
-        if (osmdRef.current && osmdRef.current.cursor) {
+        if (osmdRef.current && osmdRef.current.cursor && isLoadedRef.current) {
           osmdRef.current.cursor.show();
         }
       },
       
       hideCursor: () => {
-        if (osmdRef.current && osmdRef.current.cursor) {
+        if (osmdRef.current && osmdRef.current.cursor && isLoadedRef.current) {
           osmdRef.current.cursor.hide();
         }
       },
       
       getCursorInfo: () => {
-        if (!osmdRef.current || !osmdRef.current.cursor) return null;
+        if (!osmdRef.current || !osmdRef.current.cursor || !isLoadedRef.current) return null;
         
         try {
           const cursor = osmdRef.current.cursor;
@@ -142,7 +143,7 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
   
     // Update cursor position when currentChordIndex changes
     useEffect(() => {
-      if (osmdRef.current && osmdRef.current.cursor && showCursor) {
+      if (osmdRef.current && osmdRef.current.cursor && showCursor && isLoadedRef.current) {
         try {
           // Reset cursor to beginning before we start counting steps
           osmdRef.current.cursor.reset();
@@ -214,15 +215,18 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
       });
     }
 
-    // Load & render whenever the XML changes.
-    if (musicXml) {
-      console.log('OsmdViewer: Loading music data', {
-        isBinary,
-        dataLength: musicXml.length,
-        dataPreview: musicXml.substring(0, 100) + (musicXml.length > 100 ? '...' : '')
-      });
+            // Load & render whenever the XML changes.
+        if (musicXml) {
+          // Reset loaded state when new music data is provided
+          isLoadedRef.current = false;
+          
+          console.log('OsmdViewer: Loading music data', {
+            isBinary,
+            dataLength: musicXml.length,
+            dataPreview: musicXml.substring(0, 100) + (musicXml.length > 100 ? '...' : '')
+          });
 
-      const loadMusicData = async () => {
+          const loadMusicData = async () => {
         let loadData: string;
         
         if (isBinary) {
@@ -330,13 +334,19 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
           await osmdRef.current!.load(loadData);
           console.log('OsmdViewer: Successfully loaded music data into OSMD');
           
-          osmdRef.current!.zoom = zoom;
-          osmdRef.current!.render();
-          console.log('OsmdViewer: Successfully rendered music notation');
+          // Set loaded state and render
+          isLoadedRef.current = true;
+          if (osmdRef.current) {
+            osmdRef.current.zoom = zoom;
+            osmdRef.current.render();
+            console.log('OsmdViewer: Successfully rendered music notation');
+          }
           
         } catch (err) {
           console.error('OSMD load error:', err);
           console.error('XML preview:', loadData.substring(0, 500));
+          // Don't set loaded state on error
+          isLoadedRef.current = false;
         }
       };
 
@@ -346,7 +356,7 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
 
   // Update zoom on prop change (without re‐loading the score).
   useEffect(() => {
-    if (osmdRef.current && musicXml) {
+    if (osmdRef.current && isLoadedRef.current) {
       osmdRef.current.zoom = zoom;
       osmdRef.current.render();
     }

@@ -5,6 +5,7 @@ import NotePanel from './NotePanel';
 import Metronome from './Metronome';
 import { ChordNavigator } from '../utils/ChordNavigator';
 import { PerformanceEvaluator } from '../utils/PerformanceEvaluator';
+import { PerformanceTracker } from '../utils/PerformanceTracker';
 
 // Define interfaces for the component's props and data structures
 interface SheetMusicData {
@@ -36,9 +37,10 @@ interface SheetMusicPlayerProps {
   musicData: SheetMusicData | null; // structured data for evaluation
   musicXml: string | null;          // raw MusicXML (or base64) for rendering with OSMD
   musicXmlIsBinary?: boolean;      // whether the xml content is base64-encoded binary
+  performanceTracker?: PerformanceTracker; // optional performance tracker
 }
 
-export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, musicData, musicXml, musicXmlIsBinary }: SheetMusicPlayerProps) {
+export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, musicData, musicXml, musicXmlIsBinary, performanceTracker }: SheetMusicPlayerProps) {
   const [zoom, setZoom] = useState(1.0);
   
   // Chord navigation state
@@ -55,6 +57,7 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
   const [errorStreak, setErrorStreak] = useState(0);
   const [correctChords, setCorrectChords] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
+  const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   
   // Refs
   const chordNavigatorRef = useRef<ChordNavigator | null>(null);
@@ -102,6 +105,28 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
         },
         onNavigationComplete: () => {
           console.log('Navigation completed!');
+          
+          // Get final state before completing session
+          const finalState = chordNavigatorRef.current?.getState();
+          if (finalState && performanceTracker) {
+            // Update session with final statistics
+            performanceTracker.updateSession({
+              correctChords: finalState.correctChords,
+              errorCount: finalState.errorCount,
+              successStreak: finalState.successStreak,
+              longestStreak: finalState.longestStreak
+            });
+            
+            // Complete performance tracking session when piece is finished
+            const completedSession = performanceTracker.completeSession();
+            if (completedSession) {
+              console.log('Performance session completed automatically:', completedSession);
+              // Show completion message
+              setShowCompletionMessage(true);
+              setTimeout(() => setShowCompletionMessage(false), 3000);
+            }
+          }
+          
           setIsNavigationActive(false);
           setCurrentChord(null);
           setExpectedNotes([]);
@@ -180,6 +205,16 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
         setErrorStreak(state.errorStreak);
         setCorrectChords(state.correctChords);
         setLongestStreak(state.longestStreak);
+        
+        // Update performance tracking session
+        if (performanceTracker) {
+          performanceTracker.updateSession({
+            correctChords: state.correctChords,
+            errorCount: state.errorCount,
+            successStreak: state.successStreak,
+            longestStreak: state.longestStreak
+          });
+        }
       }
     }
 
@@ -200,6 +235,17 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
       chordNavigatorRef.current.reset();
       setIsNavigationActive(true);
       
+      // Start performance tracking session
+      if (performanceTracker) {
+        performanceTracker.startSession({
+          id: musicData.metadata?.title || `piece_${Date.now()}`,
+          title: musicData.metadata?.title || 'Untitled Piece',
+          composer: musicData.metadata?.composer,
+          tempo: musicData.tempo || 120,
+          totalChords: totalChords
+        });
+      }
+      
       // Show cursor
       if (osmdViewerRef.current) {
         osmdViewerRef.current.showCursor();
@@ -212,12 +258,20 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
         setIsEvaluationActive(true);
       }
     }
-  }, [musicData]);
+  }, [musicData, performanceTracker, totalChords]);
 
   // Stop chord navigation
   const stopChordNavigation = useCallback(() => {
     console.log('Stopping chord navigation');
     setIsNavigationActive(false);
+    
+    // Complete performance tracking session
+    if (performanceTracker) {
+      const completedSession = performanceTracker.completeSession();
+      if (completedSession) {
+        console.log('Performance session completed:', completedSession);
+      }
+    }
     
     // Hide cursor
     if (osmdViewerRef.current) {
@@ -229,7 +283,7 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
       evaluatorRef.current.stopEvaluation();
       setIsEvaluationActive(false);
     }
-  }, []);
+  }, [performanceTracker]);
 
   // Reset to beginning
   const resetNavigation = useCallback(() => {
@@ -268,7 +322,28 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
       {/* Main sheet music area */}
       <div style={{ flex: showDebugPanel ? 2 : 3, overflow: 'auto', padding: '20px', backgroundColor: '#fff', color: '#000' }}>
         {musicData && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #dee2e6', marginBottom: '15px' }}>
+          <>
+            {/* Completion Message */}
+            {showCompletionMessage && (
+              <div style={{
+                padding: '12px 16px',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: '8px',
+                marginBottom: '15px',
+                color: '#22c55e',
+                fontSize: '14px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>🎉</span>
+                <span>Piece completed! Performance data saved to your profile.</span>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #dee2e6', marginBottom: '15px' }}>
                          <button 
                onClick={isNavigationActive ? stopChordNavigation : startChordNavigation} 
                className="button primary"
@@ -326,16 +401,17 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
               </div>
             </div>
           </div>
-        )}
 
-        <OsmdViewer
-          ref={osmdViewerRef}
-          musicXml={musicXml}
-          zoom={zoom}
-          isBinary={musicXmlIsBinary}
-          currentChordIndex={currentChordIndex}
-          showCursor={isNavigationActive}
-        />
+          <OsmdViewer
+            ref={osmdViewerRef}
+            musicXml={musicXml}
+            zoom={zoom}
+            isBinary={musicXmlIsBinary}
+            currentChordIndex={currentChordIndex}
+            showCursor={isNavigationActive}
+          />
+          </>
+        )}
       </div>
 
       {/* Note panel */}
