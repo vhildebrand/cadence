@@ -79,9 +79,15 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
     if (musicData) {
       console.log('Initializing chord navigator with music data');
       
-      // Create chord navigator
+      // Create chord navigator with configurable chord bundling options
       chordNavigatorRef.current = new ChordNavigator({
         requireExactMatch: true,
+        // Adjust these parameters to change chord bundling behavior:
+        timeTolerance: 0.01,          // Increase for more lenient timing (default: 0.0001)
+        minChordSize: 1,              // Minimum notes to consider a chord (default: 1)
+        maxChordGap: 0.25,            // Maximum gap between notes to group them (default: 0.1)
+        groupByBeat: false,           // Set to true for beat-based grouping (default: false)
+        beatSubdivision: 4,           // Subdivisions per beat (default: 4)
         onChordChange: (chord, index) => {
           console.log(`Chord changed to index ${index}:`, chord);
           setCurrentChordIndex(index);

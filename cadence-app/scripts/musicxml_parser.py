@@ -110,13 +110,19 @@ class MusicXMLParser:
                 start_q = float(el.offset)  # Already absolute within the part
                 dur_q   = float(el.duration.quarterLength)
 
+                # Round timing to reduce floating point precision issues
+                start_q = round(start_q, 6)
+                dur_q = round(dur_q, 6)
+
                 timing = {
                     'start_time_quarters': start_q,
                     'duration_quarters':   dur_q,
                     'start_time_seconds':  self._quarter_length_to_seconds(start_q),
                     'duration_seconds':    self._quarter_length_to_seconds(dur_q),
                     'measure_number':      (el.getContextByClass(stream.Measure).number
-                                            if el.getContextByClass(stream.Measure) else None)
+                                            if el.getContextByClass(stream.Measure) else None),
+                    'beat_position':       self._calculate_beat_position(start_q),
+                    'part_index':          self.score.parts.index(part)
                 }
 
                 if isinstance(el, note.Note):
@@ -223,6 +229,18 @@ class MusicXMLParser:
         # 60 seconds per minute / tempo (quarter notes per minute) * quarter_length
         return (60.0 / self.tempo_bpm) * quarter_length
     
+    def _calculate_beat_position(self, quarter_length: float) -> float:
+        """Calculate the beat position within a measure"""
+        # Assuming 4/4 time signature as default
+        beats_per_measure = self.time_signature[0] if self.time_signature else 4
+        beat_duration = 4.0 / self.time_signature[1] if self.time_signature else 1.0
+        
+        # Calculate which beat this note falls on
+        measure_position = quarter_length % (beats_per_measure * beat_duration)
+        beat_position = measure_position / beat_duration
+        
+        return round(beat_position, 4)
+    
     def get_notes_for_range(self, start_seconds: float = 0, end_seconds: float = None) -> List[Dict[str, Any]]:
         """Get notes within a specific time range"""
         if end_seconds is None:
@@ -303,16 +321,20 @@ class MusicXMLParser:
                 
                 # Convert notes in this measure to VexFlow format
                 for element in measure.notesAndRests:
+                    # Round timing to reduce floating point precision issues
+                    element_offset = round(float(element.offset), 6)
+                    element_duration = round(float(element.duration.quarterLength), 6)
+                    
                     if isinstance(element, note.Note):
-                        vf_note = self._convert_note_to_vexflow(element)
+                        vf_note = self._convert_note_to_vexflow(element, element_offset, element_duration)
                         if vf_note:
                             measure_data['notes'].append(vf_note)
                     elif isinstance(element, chord.Chord):
-                        vf_note = self._convert_chord_to_vexflow(element)
+                        vf_note = self._convert_chord_to_vexflow(element, element_offset, element_duration)
                         if vf_note:
                             measure_data['notes'].append(vf_note)
                     elif isinstance(element, note.Rest):
-                        vf_note = self._convert_rest_to_vexflow(element)
+                        vf_note = self._convert_rest_to_vexflow(element, element_offset, element_duration)
                         if vf_note:
                             measure_data['notes'].append(vf_note)
                 
@@ -325,7 +347,7 @@ class MusicXMLParser:
         
         return sheet_music_data
     
-    def _convert_note_to_vexflow(self, note_obj: note.Note) -> Dict[str, Any]:
+    def _convert_note_to_vexflow(self, note_obj: note.Note, offset: float = None, duration: float = None) -> Dict[str, Any]:
         """Convert a music21 Note to VexFlow format"""
         try:
             # Convert pitch to VexFlow format (e.g., "C4", "F#5")
@@ -333,15 +355,19 @@ class MusicXMLParser:
             octave = note_obj.pitch.octave
             vf_key = f"{pitch_name}{octave}"
             
+            # Use provided timing or extract from note
+            start_time = offset if offset is not None else float(note_obj.offset)
+            note_duration = duration if duration is not None else float(note_obj.duration.quarterLength)
+            
             # Convert duration to VexFlow format
-            vf_duration = self._duration_to_vexflow(note_obj.duration.quarterLength)
+            vf_duration = self._duration_to_vexflow(note_duration)
             
             return {
                 'keys': [vf_key],
                 'duration': vf_duration,
-                'startTime': float(note_obj.offset),
-                'endTime': float(note_obj.offset + note_obj.duration.quarterLength),
-                'id': f"note_{note_obj.offset}_{pitch_name}{octave}",
+                'startTime': start_time,
+                'endTime': start_time + note_duration,
+                'id': f"note_{start_time}_{pitch_name}{octave}",
                 'midiNumbers': [note_obj.pitch.midi],
                 'stem_direction': 1 if note_obj.pitch.midi >= 60 else -1  # Middle C and above = up stem
             }
@@ -349,7 +375,7 @@ class MusicXMLParser:
             print(f"Error converting note to VexFlow: {e}")
             return None
     
-    def _convert_chord_to_vexflow(self, chord_obj: chord.Chord) -> Dict[str, Any]:
+    def _convert_chord_to_vexflow(self, chord_obj: chord.Chord, offset: float = None, duration: float = None) -> Dict[str, Any]:
         """Convert a music21 Chord to VexFlow format"""
         try:
             # Convert all pitches in chord to VexFlow keys
@@ -362,15 +388,19 @@ class MusicXMLParser:
                 vf_keys.append(f"{pitch_name}{octave}")
                 midi_numbers.append(pitch.midi)
             
+            # Use provided timing or extract from chord
+            start_time = offset if offset is not None else float(chord_obj.offset)
+            chord_duration = duration if duration is not None else float(chord_obj.duration.quarterLength)
+            
             # Convert duration to VexFlow format
-            vf_duration = self._duration_to_vexflow(chord_obj.duration.quarterLength)
+            vf_duration = self._duration_to_vexflow(chord_duration)
             
             return {
                 'keys': vf_keys,
                 'duration': vf_duration,
-                'startTime': float(chord_obj.offset),
-                'endTime': float(chord_obj.offset + chord_obj.duration.quarterLength),
-                'id': f"chord_{chord_obj.offset}_{len(vf_keys)}notes",
+                'startTime': start_time,
+                'endTime': start_time + chord_duration,
+                'id': f"chord_{start_time}_{len(vf_keys)}notes",
                 'midiNumbers': midi_numbers,
                 'stem_direction': 1 if min(midi_numbers) >= 60 else -1
             }
@@ -378,18 +408,22 @@ class MusicXMLParser:
             print(f"Error converting chord to VexFlow: {e}")
             return None
     
-    def _convert_rest_to_vexflow(self, rest_obj: note.Rest) -> Dict[str, Any]:
+    def _convert_rest_to_vexflow(self, rest_obj: note.Rest, offset: float = None, duration: float = None) -> Dict[str, Any]:
         """Convert a music21 Rest to VexFlow format"""
         try:
+            # Use provided timing or extract from rest
+            start_time = offset if offset is not None else float(rest_obj.offset)
+            rest_duration = duration if duration is not None else float(rest_obj.duration.quarterLength)
+            
             # Convert duration to VexFlow format
-            vf_duration = self._duration_to_vexflow(rest_obj.duration.quarterLength)
+            vf_duration = self._duration_to_vexflow(rest_duration)
             
             return {
                 'keys': ['B4'],  # VexFlow uses B4 for rest positioning
                 'duration': vf_duration,
-                'startTime': float(rest_obj.offset),
-                'endTime': float(rest_obj.offset + rest_obj.duration.quarterLength),
-                'id': f"rest_{rest_obj.offset}",
+                'startTime': start_time,
+                'endTime': start_time + rest_duration,
+                'id': f"rest_{start_time}",
                 'midiNumbers': [],
                 'isRest': True
             }

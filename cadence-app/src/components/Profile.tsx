@@ -8,7 +8,7 @@ interface ProfileProps {
   performanceTracker: PerformanceTracker;
 }
 
-// Simple chart component for trends
+// Line chart component for trends
 const TrendChart = ({ 
   data, 
   title, 
@@ -38,6 +38,27 @@ const TrendChart = ({
 
   const maxValue = Math.max(...data.map(d => d.y));
   const minValue = Math.min(...data.map(d => d.y));
+  const range = maxValue - minValue || 1; // Avoid division by zero
+  
+  const chartHeight = height - 30;
+  const chartWidth = 300; // Fixed width for consistency
+  const padding = 20;
+  const plotWidth = chartWidth - 2 * padding;
+  const plotHeight = chartHeight - 2 * padding;
+
+  // Calculate point positions
+  const points = data.map((point, index) => ({
+    x: padding + (index / Math.max(data.length - 1, 1)) * plotWidth,
+    y: padding + (1 - (point.y - minValue) / range) * plotHeight,
+    value: point.y,
+    date: point.x
+  }));
+
+  // Create path string for the line
+  const pathData = points.reduce((path, point, index) => {
+    const command = index === 0 ? 'M' : 'L';
+    return `${path} ${command} ${point.x} ${point.y}`;
+  }, '');
 
   return (
     <div style={{ height }}>
@@ -50,27 +71,106 @@ const TrendChart = ({
         {title}
       </div>
       <div style={{
-        height: height - 30,
-        display: 'flex',
-        alignItems: 'end',
-        gap: '2px',
-        padding: '8px 0'
+        height: chartHeight,
+        position: 'relative',
+        background: 'rgba(255,255,255,0.02)',
+        borderRadius: '8px',
+        overflow: 'hidden'
       }}>
-        {data.map((point, index) => (
-          <div
-            key={index}
-            style={{
-              flex: 1,
-              backgroundColor: color,
-              height: `${((point.y - minValue) / (maxValue - minValue)) * 100}%`,
-              minHeight: '4px',
-              borderRadius: '2px',
-              opacity: 0.8,
-              transition: 'opacity 0.2s ease'
-            }}
-            title={`${point.x}: ${point.y.toFixed(1)}`}
+        <svg
+          width={chartWidth}
+          height={chartHeight}
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block'
+          }}
+        >
+          {/* Grid lines */}
+          <defs>
+            <pattern
+              id={`grid-${title.replace(/\s+/g, '')}`}
+              width="40"
+              height="30"
+              patternUnits="userSpaceOnUse"
+            >
+              <path
+                d="M 40 0 L 0 0 0 30"
+                fill="none"
+                stroke="rgba(255,255,255,0.05)"
+                strokeWidth="1"
+              />
+            </pattern>
+          </defs>
+          <rect
+            width={chartWidth}
+            height={chartHeight}
+            fill={`url(#grid-${title.replace(/\s+/g, '')})`}
           />
-        ))}
+          
+          {/* Main trend line */}
+          <path
+            d={pathData}
+            fill="none"
+            stroke={color}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+            }}
+          />
+          
+          {/* Data points */}
+          {points.map((point, index) => (
+            <g key={index}>
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="4"
+                fill={color}
+                stroke="rgba(255,255,255,0.8)"
+                strokeWidth="2"
+                style={{
+                  cursor: 'pointer',
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                }}
+              >
+                <title>{`${point.date}: ${point.value.toFixed(1)}`}</title>
+              </circle>
+              {/* Hover effect */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="8"
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+              >
+                <title>{`${point.date}: ${point.value.toFixed(1)}`}</title>
+              </circle>
+            </g>
+          ))}
+          
+          {/* Y-axis labels */}
+          <text
+            x={padding - 5}
+            y={padding + 5}
+            fill="rgba(255,255,255,0.6)"
+            fontSize="10"
+            textAnchor="end"
+          >
+            {maxValue.toFixed(0)}
+          </text>
+          <text
+            x={padding - 5}
+            y={chartHeight - padding + 5}
+            fill="rgba(255,255,255,0.6)"
+            fontSize="10"
+            textAnchor="end"
+          >
+            {minValue.toFixed(0)}
+          </text>
+        </svg>
       </div>
     </div>
   );
@@ -235,12 +335,23 @@ export default function Profile({ performanceTracker }: ProfileProps) {
     return performanceTracker.getPiecePerformance(selectedPiece);
   }, [selectedPiece, performanceTracker]);
 
-  // Get overall trends
+  // Get overall trends - individual sessions as data points
   const overallTrends = useMemo(() => {
-    const trends = performanceTracker.getOverallTrends(30);
+    const profile = performanceTracker.getProfile();
+    const cutoffDate = Date.now() - (30 * 24 * 60 * 60 * 1000); // 30 days ago
+    const recentSessions = profile.recentSessions
+      .filter(session => session.timestamp >= cutoffDate)
+      .sort((a, b) => a.timestamp - b.timestamp);
+    
     return {
-      dates: trends.dates.map(date => ({ x: date, y: trends.averageAccuracies[trends.dates.indexOf(date)] || 0 })),
-      sessions: trends.dates.map(date => ({ x: date, y: trends.totalSessions[trends.dates.indexOf(date)] || 0 }))
+      dates: recentSessions.map(session => ({ 
+        x: new Date(session.timestamp).toLocaleDateString(), 
+        y: session.accuracy 
+      })),
+      sessions: recentSessions.map((session, index) => ({ 
+        x: new Date(session.timestamp).toLocaleDateString(), 
+        y: index + 1 // Cumulative session count
+      }))
     };
   }, [performanceTracker]);
 
@@ -428,7 +539,7 @@ export default function Profile({ performanceTracker }: ProfileProps) {
               fontSize: '18px',
               fontWeight: '600'
             }}>
-              📈 30-Day Trends
+              📈 Performance Trends (30 Days)
             </h3>
             <div style={{
               display: 'grid',
@@ -437,12 +548,12 @@ export default function Profile({ performanceTracker }: ProfileProps) {
             }}>
               <TrendChart
                 data={overallTrends.dates}
-                title="Average Accuracy"
+                title="Individual Session Accuracy"
                 color="#22c55e"
               />
               <TrendChart
                 data={overallTrends.sessions}
-                title="Sessions per Day"
+                title="Cumulative Sessions"
                 color="#3b82f6"
               />
             </div>
@@ -595,7 +706,7 @@ export default function Profile({ performanceTracker }: ProfileProps) {
                         fontSize: '14px',
                         fontWeight: '500'
                       }}>
-                        Performance Trends (30 days)
+                        Individual Performance Sessions (30 days)
                       </h4>
                       <div style={{
                         display: 'grid',
@@ -604,13 +715,13 @@ export default function Profile({ performanceTracker }: ProfileProps) {
                       }}>
                         <TrendChart
                           data={pieceTrends.accuracies}
-                          title="Accuracy"
+                          title="Session Accuracy"
                           color="#22c55e"
                           height={100}
                         />
                         <TrendChart
                           data={pieceTrends.streaks}
-                          title="Best Streak"
+                          title="Session Best Streak"
                           color="#3b82f6"
                           height={100}
                         />
