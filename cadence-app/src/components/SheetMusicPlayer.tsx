@@ -318,7 +318,7 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
   const progress = totalChords > 0 ? currentChordIndex / totalChords : 0;
 
   return (
-    <div className="sheet-music-player" style={{ display: 'flex', flex: 1, overflow: 'hidden', height: '100%' }}>
+    <div className="sheet-music-player" style={{ display: 'flex', flex: 1, overflow: 'visible', height: '100%' }}>
       {/* Main sheet music area */}
       <div style={{ 
         flex: showDebugPanel ? 2 : 3, 
@@ -329,7 +329,8 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
         display: 'flex',
         flexDirection: 'column',
         justifyContent: musicData ? 'flex-start' : 'center',
-        alignItems: musicData ? 'stretch' : 'center'
+        alignItems: musicData ? 'stretch' : 'center',
+        minHeight: '100vh'
       }}>
         {musicData ? (
           <>
@@ -451,7 +452,11 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
           backgroundColor: 'rgba(42, 42, 62, 0.6)',
           color: '#ffffff',
           borderLeft: '1px solid #3a3a4a',
-          backdropFilter: 'blur(10px)'
+          backdropFilter: 'blur(10px)',
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+          alignSelf: 'flex-start'
         }}>
           <NotePanel
             expectedNotes={expectedNotes}
@@ -484,7 +489,11 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
           backgroundColor: 'rgba(42, 42, 62, 0.6)',
           color: '#ffffff',
           borderLeft: '1px solid #3a3a4a',
-          backdropFilter: 'blur(10px)'
+          backdropFilter: 'blur(10px)',
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+          alignSelf: 'flex-start'
         }}>
           <PerformanceMetricsDisplay
             metrics={performanceMetrics}
