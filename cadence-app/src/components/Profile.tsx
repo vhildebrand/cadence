@@ -1,11 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { PerformanceTracker } from '../utils/PerformanceTracker';
 import type { UserProfile, PiecePerformance, PerformanceSession } from '../utils/PerformanceTracker';
+import { ScalePerformanceTracker } from '../utils/ScalePerformanceTracker';
+import type { ScaleUserProfile, ScalePerformance, ScalePerformanceSession } from '../utils/ScalePerformanceTracker';
 import { EarTrainingStatsManager } from '../utils/EarTrainingStats';
 import type { EarTrainingStats } from '../utils/EarTrainingStats';
 
 interface ProfileProps {
   performanceTracker: PerformanceTracker;
+  scalePerformanceTracker?: ScalePerformanceTracker;
 }
 
 // Line chart component for trends
@@ -298,10 +301,11 @@ const SessionCard = ({ session }: { session: PerformanceSession }) => (
   </div>
 );
 
-export default function Profile({ performanceTracker }: ProfileProps) {
+export default function Profile({ performanceTracker, scalePerformanceTracker }: ProfileProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [scaleProfile, setScaleProfile] = useState<ScaleUserProfile | null>(null);
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'pieces' | 'recent' | 'ear-training'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pieces' | 'recent' | 'ear-training' | 'scales'>('overview');
   const [earTrainingStats, setEarTrainingStats] = useState<EarTrainingStats>(EarTrainingStatsManager.getStats());
 
   // Load profile data and subscribe to changes
@@ -315,6 +319,20 @@ export default function Profile({ performanceTracker }: ProfileProps) {
 
     return unsubscribe;
   }, [performanceTracker]);
+
+  // Load scale profile data and subscribe to changes
+  useEffect(() => {
+    if (scalePerformanceTracker) {
+      setScaleProfile(scalePerformanceTracker.getProfile());
+      
+      // Subscribe to scale profile changes
+      const unsubscribe = scalePerformanceTracker.subscribe(() => {
+        setScaleProfile(scalePerformanceTracker.getProfile());
+      });
+
+      return unsubscribe;
+    }
+  }, [scalePerformanceTracker]);
 
   // Load ear training stats
   useEffect(() => {
@@ -491,6 +509,23 @@ export default function Profile({ performanceTracker }: ProfileProps) {
         >
           Ear Training ({earTrainingStats.totalSessions})
         </button>
+        {scalePerformanceTracker && (
+          <button
+            onClick={() => setActiveTab('scales')}
+            style={{
+              padding: '8px 16px',
+              background: activeTab === 'scales' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+              border: 'none',
+              borderRadius: '8px',
+              color: activeTab === 'scales' ? '#ffffff' : '#e4e4f4',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            Scale Practice ({scaleProfile?.totalSessions || 0})
+          </button>
+        )}
       </div>
 
       {/* Overview Tab */}
@@ -795,6 +830,242 @@ export default function Profile({ performanceTracker }: ProfileProps) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Scales Tab */}
+      {activeTab === 'scales' && scaleProfile && (
+        <div>
+          {/* Scale Practice Overview */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            <StatCard 
+              title="Total Sessions" 
+              value={scaleProfile.totalSessions} 
+              subtitle="Scale practice sessions"
+              color="#22c55e"
+            />
+            <StatCard 
+              title="Practice Time" 
+              value={formatDuration(scaleProfile.totalPlayTime)} 
+              subtitle="Total practice duration"
+              color="#3b82f6"
+            />
+            <StatCard 
+              title="Scales Practiced" 
+              value={scaleProfile.totalScales} 
+              subtitle="Different scales practiced"
+              color="#f59e0b"
+            />
+            <StatCard 
+              title="Best Accuracy" 
+              value={`${scaleProfile.bestAccuracy.toFixed(1)}%`} 
+              subtitle="Highest note accuracy"
+              color="#8b5cf6"
+            />
+            {scaleProfile.averageTimingAccuracy > 0 && (
+              <StatCard 
+                title="Best Timing" 
+                value={`${scaleProfile.bestTimingAccuracy.toFixed(1)}%`} 
+                subtitle="Best metronome timing"
+                color="#06b6d4"
+              />
+            )}
+            <StatCard 
+              title="Metronome Usage" 
+              value={`${scaleProfile.metronomeUsageRate.toFixed(1)}%`} 
+              subtitle="Sessions with metronome"
+              color="#10b981"
+            />
+          </div>
+
+          {/* Scale Types Performance */}
+          {scalePerformanceTracker && (() => {
+            const scaleTypeStats = scalePerformanceTracker.getScaleTypeStats();
+            return scaleTypeStats.length > 0 && (
+              <div style={{
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '12px',
+                padding: '20px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                marginBottom: '24px'
+              }}>
+                <h4 style={{ 
+                  margin: '0 0 16px 0', 
+                  color: '#ffffff',
+                  fontSize: '16px',
+                  fontWeight: '600'
+                }}>
+                  Performance by Scale Type
+                </h4>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                  gap: '16px'
+                }}>
+                  {scaleTypeStats.map(stat => (
+                    <div key={stat.scaleType} style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      border: '1px solid rgba(255,255,255,0.1)'
+                    }}>
+                      <h5 style={{ 
+                        margin: '0 0 12px 0', 
+                        color: '#ffffff',
+                        fontSize: '14px',
+                        fontWeight: '600'
+                      }}>
+                        {stat.scaleType}
+                      </h5>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                        <div>
+                          <div style={{ color: '#6c757d' }}>Sessions:</div>
+                          <div style={{ color: '#ffffff', fontWeight: '500' }}>{stat.totalSessions}</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#6c757d' }}>Avg Accuracy:</div>
+                          <div style={{ color: '#22c55e', fontWeight: '500' }}>{stat.averageAccuracy.toFixed(1)}%</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#6c757d' }}>Best Accuracy:</div>
+                          <div style={{ color: '#3b82f6', fontWeight: '500' }}>{stat.bestAccuracy.toFixed(1)}%</div>
+                        </div>
+                        {stat.averageTimingAccuracy > 0 && (
+                          <div>
+                            <div style={{ color: '#6c757d' }}>Avg Timing:</div>
+                            <div style={{ color: '#06b6d4', fontWeight: '500' }}>{stat.averageTimingAccuracy.toFixed(1)}%</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Recent Scale Sessions */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            marginBottom: '24px'
+          }}>
+            <h4 style={{ 
+              margin: '0 0 16px 0', 
+              color: '#ffffff',
+              fontSize: '16px',
+              fontWeight: '600'
+            }}>
+              Recent Scale Practice Sessions
+            </h4>
+            {scaleProfile.recentSessions.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '20px',
+                color: '#6c757d'
+              }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>🎼</div>
+                <div>No scale practice sessions yet</div>
+                <div style={{ fontSize: '12px', marginTop: '4px' }}>Start practicing scales to see your progress here</div>
+              </div>
+            ) : (
+              <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+                {scaleProfile.recentSessions.slice(0, 10).map(session => (
+                  <div key={session.id} style={{
+                    padding: '16px',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <div>
+                        <div style={{ fontWeight: '600', color: '#ffffff', fontSize: '14px' }}>
+                          {session.scaleName} in {session.rootNote}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '2px' }}>
+                          {new Date(session.timestamp).toLocaleDateString()} • {formatDuration(session.duration)}
+                        </div>
+                      </div>
+                      <div style={{
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        background: session.accuracy >= 90 ? 'rgba(34, 197, 94, 0.2)' : 
+                                   session.accuracy >= 70 ? 'rgba(251, 191, 36, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                        color: session.accuracy >= 90 ? '#22c55e' : 
+                               session.accuracy >= 70 ? '#fbbf24' : '#ef4444'
+                      }}>
+                        {session.accuracy.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px', fontSize: '11px' }}>
+                      <div>
+                        <span style={{ color: '#6c757d' }}>Direction: </span>
+                        <span style={{ color: '#ffffff' }}>{session.direction}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#6c757d' }}>Notes: </span>
+                        <span style={{ color: '#ffffff' }}>{session.correctNotes}/{session.totalNotes}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#6c757d' }}>Streak: </span>
+                        <span style={{ color: '#ffffff' }}>{session.longestStreak}</span>
+                      </div>
+                      {session.metronomeEnabled && (
+                        <>
+                          <div>
+                            <span style={{ color: '#6c757d' }}>BPM: </span>
+                            <span style={{ color: '#ffffff' }}>{session.bpm}</span>
+                          </div>
+                          {session.timingAccuracy !== undefined && (
+                            <div>
+                              <span style={{ color: '#6c757d' }}>Timing: </span>
+                              <span style={{ color: '#06b6d4' }}>{session.timingAccuracy.toFixed(1)}%</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Clear Scale Data Button */}
+          <div style={{
+            textAlign: 'center',
+            marginBottom: '24px'
+          }}>
+            <button
+              onClick={() => {
+                if (confirm('Are you sure you want to clear all scale practice data? This cannot be undone.')) {
+                  scalePerformanceTracker?.clearAllData();
+                  setScaleProfile(scalePerformanceTracker?.getProfile() || null);
+                }
+              }}
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                color: '#fca5a5',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              Clear Scale Practice Data
+            </button>
+          </div>
         </div>
       )}
 

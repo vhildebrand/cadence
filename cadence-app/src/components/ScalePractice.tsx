@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Button from './Button';
 import Metronome from './Metronome';
+import { ScalePerformanceTracker } from '../utils/ScalePerformanceTracker';
 
 interface ScalePracticeProps {
   activeMidiNotes: Map<number, { note: number; velocity: number; timestamp: number }>;
   onMidiMessage: (message: any) => void;
+  scalePerformanceTracker: ScalePerformanceTracker;
 }
 
 // Scale definitions - MIDI note numbers relative to the root note
@@ -62,6 +64,7 @@ interface ScalePracticeState {
   startTime: number | null;
   totalNotes: number;
   correctNotes: number;
+  errorCount: number;
   lastNoteTime: number | null;
   metronomeBpm: number;
   isMetronomeEnabled: boolean;
@@ -70,7 +73,8 @@ interface ScalePracticeState {
 
 const ScalePractice: React.FC<ScalePracticeProps> = ({
   activeMidiNotes,
-  onMidiMessage
+  onMidiMessage,
+  scalePerformanceTracker
 }) => {
   const [practiceState, setPracticeState] = useState<ScalePracticeState>({
     isActive: false,
@@ -88,6 +92,7 @@ const ScalePractice: React.FC<ScalePracticeProps> = ({
     startTime: null,
     totalNotes: 0,
     correctNotes: 0,
+    errorCount: 0,
     lastNoteTime: null,
     metronomeBpm: 120,
     isMetronomeEnabled: false,
@@ -95,6 +100,9 @@ const ScalePractice: React.FC<ScalePracticeProps> = ({
   });
 
   const [lastBeatTime, setLastBeatTime] = useState<number | null>(null);
+  const [onTimeNotes, setOnTimeNotes] = useState<number>(0);
+  const [totalTimingError, setTotalTimingError] = useState<number>(0);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // Convert MIDI note number to note name
   const noteNumberToName = (noteNumber: number): string => {
@@ -134,6 +142,23 @@ const ScalePractice: React.FC<ScalePracticeProps> = ({
     const notes = generateScaleNotes();
     if (notes.length === 0) return;
 
+    // Start performance tracking session
+    const sessionId = scalePerformanceTracker.startSession({
+      scaleName: practiceState.currentScale,
+      rootNote: practiceState.currentRoot,
+      octave: practiceState.currentOctave,
+      direction: practiceState.shouldPlayAscending && practiceState.shouldPlayDescending ? 'both' : 
+                 practiceState.shouldPlayAscending ? 'ascending' : 'descending',
+      totalNotes: notes.length,
+      metronomeEnabled: practiceState.isMetronomeEnabled,
+      bpm: practiceState.metronomeBpm,
+      toleranceMs: practiceState.toleranceMs
+    });
+
+    setCurrentSessionId(sessionId);
+    setOnTimeNotes(0);
+    setTotalTimingError(0);
+
     setPracticeState(prev => ({
       ...prev,
       isActive: true,
@@ -143,6 +168,7 @@ const ScalePractice: React.FC<ScalePracticeProps> = ({
       startTime: Date.now(),
       totalNotes: notes.length,
       correctNotes: 0,
+      errorCount: 0,
       lastNoteTime: null
     }));
 
@@ -154,12 +180,39 @@ const ScalePractice: React.FC<ScalePracticeProps> = ({
       message: `Practice ${practiceState.currentScale} scale in ${practiceState.currentRoot}`,
       duration: 3000
     });
-  }, [generateScaleNotes, practiceState.currentScale, practiceState.currentRoot]);
+  }, [generateScaleNotes, practiceState.currentScale, practiceState.currentRoot, practiceState.currentOctave, practiceState.shouldPlayAscending, practiceState.shouldPlayDescending, practiceState.isMetronomeEnabled, practiceState.metronomeBpm, practiceState.toleranceMs, scalePerformanceTracker]);
 
   // Stop practice
   const stopPractice = useCallback(() => {
     const accuracy = practiceState.totalNotes > 0 ? (practiceState.correctNotes / practiceState.totalNotes) * 100 : 0;
     const duration = practiceState.startTime ? (Date.now() - practiceState.startTime) / 1000 : 0;
+
+    // Update and complete performance tracking session
+    if (currentSessionId) {
+      scalePerformanceTracker.updateSession({
+        correctNotes: practiceState.correctNotes,
+        errorCount: practiceState.errorCount,
+        successStreak: practiceState.consecutiveCorrect,
+        longestStreak: practiceState.consecutiveCorrect,
+        onTimeNotes: onTimeNotes,
+        totalTimingError: totalTimingError
+      });
+      
+      const completedSession = scalePerformanceTracker.completeSession();
+      
+      if (completedSession) {
+        const timingMessage = completedSession.metronomeEnabled && completedSession.timingAccuracy !== undefined 
+          ? ` | Timing: ${completedSession.timingAccuracy.toFixed(1)}%`
+          : '';
+        
+        (window as any).showToast?.({
+          type: 'success',
+          title: 'Practice Complete!',
+          message: `Accuracy: ${accuracy.toFixed(1)}% | Duration: ${duration.toFixed(1)}s${timingMessage}`,
+          duration: 4000
+        });
+      }
+    }
 
     setPracticeState(prev => ({
       ...prev,
@@ -167,18 +220,15 @@ const ScalePractice: React.FC<ScalePracticeProps> = ({
       currentNoteIndex: 0,
       completedNotes: [],
       startTime: null,
-      lastNoteTime: null
+      lastNoteTime: null,
+      errorCount: 0
     }));
 
     setLastBeatTime(null);
-
-    (window as any).showToast?.({
-      type: 'success',
-      title: 'Practice Complete!',
-      message: `Accuracy: ${accuracy.toFixed(1)}% | Duration: ${duration.toFixed(1)}s`,
-      duration: 4000
-    });
-  }, [practiceState.totalNotes, practiceState.correctNotes, practiceState.startTime]);
+    setCurrentSessionId(null);
+    setOnTimeNotes(0);
+    setTotalTimingError(0);
+  }, [practiceState.totalNotes, practiceState.correctNotes, practiceState.startTime, practiceState.errorCount, practiceState.consecutiveCorrect, currentSessionId, onTimeNotes, totalTimingError, scalePerformanceTracker]);
 
   // Handle MIDI input
   useEffect(() => {
@@ -202,20 +252,28 @@ const ScalePractice: React.FC<ScalePracticeProps> = ({
         const timingError = Math.abs(timeSinceLastBeat - expectedBeatTime);
         
         isOnTime = timingError <= practiceState.toleranceMs;
+        
+        // Track timing statistics
+        if (isOnTime) {
+          setOnTimeNotes(prev => prev + 1);
+        }
+        setTotalTimingError(prev => prev + timingError);
       }
 
       // Move to next note
       setPracticeState(prev => {
-        const newCorrectNotes = prev.correctNotes + (isOnTime ? 1 : 0);
+        const newCorrectNotes = prev.correctNotes + 1;
         const newCompletedNotes = [...prev.completedNotes, currentExpectedNote];
         const newIndex = prev.currentNoteIndex + 1;
         const newConsecutiveCorrect = isOnTime ? prev.consecutiveCorrect + 1 : 0;
+        const newErrorCount = isOnTime ? prev.errorCount : prev.errorCount + 1;
 
         return {
           ...prev,
           currentNoteIndex: newIndex,
           completedNotes: newCompletedNotes,
           correctNotes: newCorrectNotes,
+          errorCount: newErrorCount,
           consecutiveCorrect: newConsecutiveCorrect,
           score: prev.score + (isOnTime ? 10 : 5),
           lastNoteTime: currentTime

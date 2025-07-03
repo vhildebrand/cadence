@@ -8,6 +8,7 @@ import Button from './components/Button'
 import LoadingSpinner from './components/LoadingSpinner'
 import { ToastContainer } from './components/Toast'
 import { PerformanceTracker } from './utils/PerformanceTracker'
+import { ScalePerformanceTracker } from './utils/ScalePerformanceTracker'
 import ScalePractice from './components/ScalePractice'
 
 // Define the MIDI message type
@@ -72,8 +73,9 @@ function App() {
   const [midiStatus, setMidiStatus] = useState<string>('Not connected');
   const [connectedDevices, setConnectedDevices] = useState<string[]>([]);
   
-  // Performance tracker instance
+  // Performance tracker instances
   const performanceTracker = useMemo(() => new PerformanceTracker(), []);
+  const scalePerformanceTracker = useMemo(() => new ScalePerformanceTracker(), []);
   
   // Note Fall configuration
   const [noteRange, setNoteRange] = useState({
@@ -610,7 +612,7 @@ function App() {
           height: '100%',
           padding: '20px'
         }}>
-          <Profile performanceTracker={performanceTracker} />
+          <Profile performanceTracker={performanceTracker} scalePerformanceTracker={scalePerformanceTracker} />
         </div>
       </div>
     );
@@ -682,6 +684,7 @@ function App() {
           <ScalePractice 
             activeMidiNotes={activeMidiNotes}
             onMidiMessage={handleMIDIMessage}
+            scalePerformanceTracker={scalePerformanceTracker}
           />
         </div>
       </div>
