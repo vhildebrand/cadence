@@ -9,8 +9,10 @@ import LoadingSpinner from './components/LoadingSpinner'
 import { ToastContainer } from './components/Toast'
 import { PerformanceTracker } from './utils/PerformanceTracker'
 import { ScalePerformanceTracker } from './utils/ScalePerformanceTracker'
+import { LessonPlannerTracker, type LessonPlan, type LessonSession } from './utils/LessonPlannerTracker'
 import ScalePractice from './components/ScalePractice'
 import LessonPlanner from './components/LessonPlanner'
+import CurrentExercisePopup from './components/CurrentExercisePopup'
 
 // Define the MIDI message type
 interface MidiMessage {
@@ -77,6 +79,7 @@ function App() {
   // Performance tracker instances
   const performanceTracker = useMemo(() => new PerformanceTracker(), []);
   const scalePerformanceTracker = useMemo(() => new ScalePerformanceTracker(), []);
+  const lessonPlannerTracker = useMemo(() => new LessonPlannerTracker(), []);
   
   // Note Fall configuration
   const [noteRange, setNoteRange] = useState({
@@ -103,6 +106,14 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+
+  // Lesson planner state (lifted from LessonPlanner component)
+  const [currentSession, setCurrentSession] = useState<LessonSession | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<LessonPlan | null>(null);
+  const [currentActivityIndex, setCurrentActivityIndex] = useState(0);
+  
+  // Current exercise popup state
+  const [isExercisePopupOpen, setIsExercisePopupOpen] = useState(false);
 
   // Initialize Web MIDI API
   useEffect(() => {
@@ -472,6 +483,72 @@ function App() {
     console.log('Activity completed:', activityId, metrics);
   };
 
+  // Handle popup activity actions
+  const handlePopupActivityStart = (activity: any) => {
+    setIsExercisePopupOpen(false);
+    handleLessonActivityStart(activity);
+  };
+
+  const handlePopupActivityComplete = (activityId: string) => {
+    lessonPlannerTracker.completeActivity(activityId, {
+      activityType: 'custom',
+      activityId: activityId,
+      notes: ''
+    });
+    
+    (window as any).showToast?.({
+      type: 'success',
+      title: 'Activity Completed!',
+      message: 'Great job! Keep up the good work.',
+      duration: 3000
+    });
+  };
+
+  // Initialize lesson planner data
+  useEffect(() => {
+    const updateLessonState = () => {
+      const session = lessonPlannerTracker.getCurrentSession();
+      setCurrentSession(session);
+      
+      if (session) {
+        const plan = lessonPlannerTracker.getLessonPlan(session.lessonPlanId);
+        setSelectedPlan(plan);
+        
+        // Calculate current activity index based on completed activities
+        if (plan) {
+          const completedCount = session.completedActivities.length;
+          setCurrentActivityIndex(Math.min(completedCount, plan.activities.length - 1));
+        }
+      } else {
+        setSelectedPlan(null);
+        setCurrentActivityIndex(0);
+      }
+    };
+
+    updateLessonState();
+    lessonPlannerTracker.addListener(updateLessonState);
+
+    return () => {
+      lessonPlannerTracker.removeListener(updateLessonState);
+    };
+  }, [lessonPlannerTracker]);
+
+  // Keyboard shortcut listener
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check for Ctrl+E (or Cmd+E on Mac)
+      if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+        event.preventDefault();
+        setIsExercisePopupOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   // Lesson Planner mode
   if (currentMode === 'lesson-planner') {
     return (
@@ -538,8 +615,19 @@ function App() {
           <LessonPlanner
             onStartActivity={handleLessonActivityStart}
             onActivityComplete={handleLessonActivityComplete}
+            lessonPlannerTracker={lessonPlannerTracker}
           />
         </div>
+
+        <CurrentExercisePopup
+          isOpen={isExercisePopupOpen}
+          onClose={() => setIsExercisePopupOpen(false)}
+          currentSession={currentSession}
+          selectedPlan={selectedPlan}
+          currentActivityIndex={currentActivityIndex}
+          onStartActivity={handlePopupActivityStart}
+          onCompleteActivity={handlePopupActivityComplete}
+        />
       </div>
     );
   }
@@ -628,6 +716,16 @@ function App() {
           activeMidiNotes={activeMidiNotes}
           noteRange={noteRange}
         />
+
+        <CurrentExercisePopup
+          isOpen={isExercisePopupOpen}
+          onClose={() => setIsExercisePopupOpen(false)}
+          currentSession={currentSession}
+          selectedPlan={selectedPlan}
+          currentActivityIndex={currentActivityIndex}
+          onStartActivity={handlePopupActivityStart}
+          onCompleteActivity={handlePopupActivityComplete}
+        />
       </div>
     );
   }
@@ -684,6 +782,16 @@ function App() {
           musicXmlIsBinary={musicXmlIsBinary}
           performanceTracker={performanceTracker}
         />
+
+        <CurrentExercisePopup
+          isOpen={isExercisePopupOpen}
+          onClose={() => setIsExercisePopupOpen(false)}
+          currentSession={currentSession}
+          selectedPlan={selectedPlan}
+          currentActivityIndex={currentActivityIndex}
+          onStartActivity={handlePopupActivityStart}
+          onCompleteActivity={handlePopupActivityComplete}
+        />
       </div>
     );
   }
@@ -717,8 +825,22 @@ function App() {
           height: '100%',
           padding: '20px'
         }}>
-          <Profile performanceTracker={performanceTracker} scalePerformanceTracker={scalePerformanceTracker} />
+          <Profile 
+            performanceTracker={performanceTracker} 
+            scalePerformanceTracker={scalePerformanceTracker}
+            lessonPlannerTracker={lessonPlannerTracker}
+          />
         </div>
+
+        <CurrentExercisePopup
+          isOpen={isExercisePopupOpen}
+          onClose={() => setIsExercisePopupOpen(false)}
+          currentSession={currentSession}
+          selectedPlan={selectedPlan}
+          currentActivityIndex={currentActivityIndex}
+          onStartActivity={handlePopupActivityStart}
+          onCompleteActivity={handlePopupActivityComplete}
+        />
       </div>
     );
   }
@@ -756,6 +878,16 @@ function App() {
             onMidiMessage={handleMIDIMessage}
           />
         </div>
+
+        <CurrentExercisePopup
+          isOpen={isExercisePopupOpen}
+          onClose={() => setIsExercisePopupOpen(false)}
+          currentSession={currentSession}
+          selectedPlan={selectedPlan}
+          currentActivityIndex={currentActivityIndex}
+          onStartActivity={handlePopupActivityStart}
+          onCompleteActivity={handlePopupActivityComplete}
+        />
       </div>
     );
   }
@@ -794,6 +926,16 @@ function App() {
             scalePerformanceTracker={scalePerformanceTracker}
           />
         </div>
+
+        <CurrentExercisePopup
+          isOpen={isExercisePopupOpen}
+          onClose={() => setIsExercisePopupOpen(false)}
+          currentSession={currentSession}
+          selectedPlan={selectedPlan}
+          currentActivityIndex={currentActivityIndex}
+          onStartActivity={handlePopupActivityStart}
+          onCompleteActivity={handlePopupActivityComplete}
+        />
       </div>
     );
   }
@@ -1049,6 +1191,16 @@ function App() {
           )}
         </section>
       </main>
+
+      <CurrentExercisePopup
+        isOpen={isExercisePopupOpen}
+        onClose={() => setIsExercisePopupOpen(false)}
+        currentSession={currentSession}
+        selectedPlan={selectedPlan}
+        currentActivityIndex={currentActivityIndex}
+        onStartActivity={handlePopupActivityStart}
+        onCompleteActivity={handlePopupActivityComplete}
+      />
 
       {/* Toast notifications */}
       <ToastContainer position="top-right" maxToasts={3} />

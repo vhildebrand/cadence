@@ -6,9 +6,10 @@ import { LessonPlannerTracker, type LessonPlan, type LessonSession, type LessonA
 interface LessonPlannerProps {
   onStartActivity: (activity: LessonActivity) => void;
   onActivityComplete: (activityId: string, metrics: any) => void;
+  lessonPlannerTracker: LessonPlannerTracker;
 }
 
-const LessonPlanner = ({ onStartActivity, onActivityComplete }: LessonPlannerProps) => {
+const LessonPlanner = ({ onStartActivity, onActivityComplete, lessonPlannerTracker }: LessonPlannerProps) => {
   const [currentView, setCurrentView] = useState<'library' | 'create' | 'session' | 'history'>('library');
   const [lessonPlans, setLessonPlans] = useState<LessonPlan[]>([]);
   const [currentSession, setCurrentSession] = useState<LessonSession | null>(null);
@@ -24,8 +25,8 @@ const LessonPlanner = ({ onStartActivity, onActivityComplete }: LessonPlannerPro
   const [newLessonDifficulty, setNewLessonDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
   const [newLessonActivities, setNewLessonActivities] = useState<LessonActivity[]>([]);
 
-  // Initialize tracker
-  const tracker = useMemo(() => new LessonPlannerTracker(), []);
+  // Use the tracker passed as prop instead of creating a new one
+  const tracker = lessonPlannerTracker;
 
   // Initialize with data from tracker
   useEffect(() => {
