@@ -27,11 +27,6 @@ interface ChordNavigatorOptions {
   onChordComplete?: (chord: ChordData) => void;
   onNavigationComplete?: () => void;
   requireExactMatch?: boolean; // If true, no extra notes allowed
-  timeTolerance?: number; // Tolerance for considering notes simultaneous (default: 0.0001)
-  minChordSize?: number; // Minimum number of notes to consider a chord (default: 1)
-  maxChordGap?: number; // Maximum gap between notes to group them (default: 0.1)
-  groupByBeat?: boolean; // Group notes by beat position rather than exact timing
-  beatSubdivision?: number; // How many subdivisions per beat (default: 4 for sixteenth notes)
 }
 
 export class ChordNavigator {
@@ -48,11 +43,6 @@ export class ChordNavigator {
   constructor(options: ChordNavigatorOptions = {}) {
     this.options = {
       requireExactMatch: true,
-      timeTolerance: 0.0001,
-      minChordSize: 1,
-      maxChordGap: 0.1,
-      groupByBeat: false,
-      beatSubdivision: 4,
       ...options
     };
     
@@ -156,70 +146,23 @@ export class ChordNavigator {
       allNotesInMeasure.sort((a, b) => (a.note.startTime || 0) - (b.note.startTime || 0));
       
       // Group notes that share the same start time (simultaneous notes across clefs)
+      const TIME_TOLERANCE = 0.0001; // very small tolerance
       const chordClusters: Array<typeof allNotesInMeasure> = [];
+      let currentCluster: typeof allNotesInMeasure = [];
+      let clusterStartTime: number | null = null;
       
-      if (this.options.groupByBeat) {
-        // Group by beat position for more flexible chord detection
-        const beatGroups = new Map<number, typeof allNotesInMeasure>();
-        
-        allNotesInMeasure.forEach(noteInfo => {
-          const st = noteInfo.note.startTime || 0;
-          // Round to nearest beat subdivision
-          const beatPosition = Math.round(st * this.options.beatSubdivision!) / this.options.beatSubdivision!;
-          
-          if (!beatGroups.has(beatPosition)) {
-            beatGroups.set(beatPosition, []);
-          }
-          beatGroups.get(beatPosition)!.push(noteInfo);
-        });
-        
-        // Convert beat groups to clusters
-        const sortedBeatPositions = Array.from(beatGroups.keys()).sort((a, b) => a - b);
-        sortedBeatPositions.forEach(beatPos => {
-          const cluster = beatGroups.get(beatPos)!;
-          if (cluster.length >= this.options.minChordSize!) {
-            chordClusters.push(cluster);
-          } else {
-            // If cluster is too small, add individual notes
-            cluster.forEach(noteInfo => chordClusters.push([noteInfo]));
-          }
-        });
-      } else {
-        // Original time-based clustering with configurable tolerance
-        let currentCluster: typeof allNotesInMeasure = [];
-        let clusterStartTime: number | null = null;
-        
-        allNotesInMeasure.forEach(noteInfo => {
-          const st = noteInfo.note.startTime || 0;
-          
-          if (clusterStartTime === null || Math.abs(st - clusterStartTime) <= this.options.timeTolerance!) {
-            currentCluster.push(noteInfo);
-            clusterStartTime = clusterStartTime === null ? st : clusterStartTime;
-          } else {
-            // Check if we should extend the cluster based on maxChordGap
-            if (currentCluster.length > 0 && st - clusterStartTime <= this.options.maxChordGap!) {
-              currentCluster.push(noteInfo);
-            } else {
-              // Finalize current cluster
-              if (currentCluster.length >= this.options.minChordSize!) {
-                chordClusters.push([...currentCluster]);
-              } else {
-                // Add individual notes if cluster is too small
-                currentCluster.forEach(ni => chordClusters.push([ni]));
-              }
-              currentCluster = [noteInfo];
-              clusterStartTime = st;
-            }
-          }
-        });
-        if (currentCluster.length > 0) {
-          if (currentCluster.length >= this.options.minChordSize!) {
-            chordClusters.push(currentCluster);
-          } else {
-            currentCluster.forEach(ni => chordClusters.push([ni]));
-          }
+      allNotesInMeasure.forEach(noteInfo => {
+        const st = noteInfo.note.startTime || 0;
+        if (clusterStartTime === null || Math.abs(st - clusterStartTime) <= TIME_TOLERANCE) {
+          currentCluster.push(noteInfo);
+          clusterStartTime = clusterStartTime === null ? st : clusterStartTime;
+        } else {
+          chordClusters.push([...currentCluster]);
+          currentCluster = [noteInfo];
+          clusterStartTime = st;
         }
-      }
+      });
+      if (currentCluster.length > 0) chordClusters.push(currentCluster);
       
       console.log(`Measure ${measureNumber} clustered into ${chordClusters.length} chords/groups`);
       
