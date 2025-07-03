@@ -18,6 +18,8 @@ interface NavigationState {
   errorCount: number; // Number of erroneous note-on events
   successStreak: number; // consecutive chords with zero errors
   errorStreak: number;   // consecutive chords that had at least 1 error
+  correctChords: number; // Total number of chords played correctly
+  longestStreak: number; // Best streak achieved during this performance
 }
 
 interface ChordNavigatorOptions {
@@ -53,7 +55,9 @@ export class ChordNavigator {
       isChordComplete: false,
       errorCount: 0,
       successStreak: 0,
-      errorStreak: 0
+      errorStreak: 0,
+      correctChords: 0,
+      longestStreak: 0
     };
   }
 
@@ -316,6 +320,12 @@ export class ChordNavigator {
     } else {
       this.state.successStreak += 1;
       this.state.errorStreak = 0;
+      this.state.correctChords += 1;
+      
+      // Update longest streak if current streak is better
+      if (this.state.successStreak > this.state.longestStreak) {
+        this.state.longestStreak = this.state.successStreak;
+      }
     }
     // Reset flag for next chord
     this.hasErrorThisChord = false;
@@ -377,6 +387,8 @@ export class ChordNavigator {
     this.state.errorCount = 0;
     this.state.successStreak = 0;
     this.state.errorStreak = 0;
+    this.state.correctChords = 0;
+    this.state.longestStreak = 0;
     this.hasErrorThisChord = false;
 
     if (this.options.onChordChange && this.state.currentChord) {

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-interface ChordDebugPanelProps {
+interface NotePanelProps {
   expectedNotes: number[]; // MIDI numbers for expected chord
   userInput: number[];     // MIDI numbers currently being pressed
   currentChordIndex: number;
@@ -15,6 +15,8 @@ interface ChordDebugPanelProps {
   errorCount: number;
   successStreak: number;
   errorStreak: number;
+  correctChords: number;
+  longestStreak: number;
 }
 
 // Helper function to convert MIDI number to note name
@@ -41,7 +43,7 @@ const getNoteColor = (midiNumber: number, expectedNotes: number[], userInput: nu
   }
 };
 
-export default function ChordDebugPanel({
+export default function NotePanel({
   expectedNotes,
   userInput,
   currentChordIndex,
@@ -50,22 +52,14 @@ export default function ChordDebugPanel({
   currentChord,
   errorCount,
   successStreak,
-  errorStreak
-}: ChordDebugPanelProps) {
+  errorStreak,
+  correctChords,
+  longestStreak
+}: NotePanelProps) {
   // Combine all notes for display (expected + pressed)
   const allRelevantNotes = useMemo(() => {
     const noteSet = new Set([...expectedNotes, ...userInput]);
     return Array.from(noteSet).sort((a, b) => a - b);
-  }, [expectedNotes, userInput]);
-
-  // Statistics
-  const { correctNotes, extraNotes, missingNotes } = useMemo(() => {
-    // Memoize stats
-    return {
-      correctNotes: expectedNotes.filter(note => userInput.includes(note)).length,
-      extraNotes: userInput.filter(note => !expectedNotes.includes(note)).length,
-      missingNotes: expectedNotes.filter(note => !userInput.includes(note)).length
-    };
   }, [expectedNotes, userInput]);
 
   return (
@@ -85,7 +79,7 @@ export default function ChordDebugPanel({
         color: '#ffffff',
         fontFamily: 'inherit'
       }}>
-        🎹 {expectedNotes.length === 1 ? 'Note' : 'Chord'} Debug Panel
+        🎹 {expectedNotes.length === 1 ? 'Note' : 'Chord'} Panel
       </h3>
 
       {/* Progress Info */}
@@ -194,80 +188,187 @@ export default function ChordDebugPanel({
         </div>
       </div>
 
-      {/* Statistics */}
+      {/* Performance Statistics */}
       <div style={{
-        padding: '12px',
-        background: 'rgba(255,255,255,0.05)',
-        borderRadius: '12px',
-        border: '1px solid rgba(255,255,255,0.1)',
-        marginBottom: '15px'
+        padding: '16px',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)',
+        borderRadius: '16px',
+        border: '1px solid rgba(255,255,255,0.12)',
+        marginBottom: '20px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
       }}>
-        <h4 style={{ margin: '0 0 8px 0', color: '#e4e4f4' }}>Statistics</h4>
+        <h4 style={{ 
+          margin: '0 0 16px 0', 
+          color: '#ffffff',
+          fontSize: '16px',
+          fontWeight: '600',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          📊 Performance Statistics
+        </h4>
+        
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
-          gap: '8px',
-          fontSize: '12px'
+          gridTemplateColumns: 'repeat(2, 1fr)',
+          gap: '12px',
+          fontSize: '13px'
+        }}>
+          {/* Correct Chords */}
+          <div style={{
+            padding: '12px',
+            background: 'linear-gradient(135deg, rgba(34,197,94,0.15) 0%, rgba(34,197,94,0.08) 100%)',
+            borderRadius: '12px',
+            border: '1px solid rgba(34,197,94,0.2)',
+            textAlign: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              right: '0',
+              height: '2px',
+              background: 'linear-gradient(90deg, #22c55e, #16a34a)'
+            }} />
+            <div style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              color: '#22c55e',
+              marginBottom: '4px'
+            }}>
+              {correctChords}
+            </div>
+            <div style={{ color: '#86efac', fontWeight: '500' }}>Correct</div>
+          </div>
+
+          {/* Errors */}
+          <div style={{
+            padding: '12px',
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.15) 0%, rgba(239,68,68,0.08) 100%)',
+            borderRadius: '12px',
+            border: '1px solid rgba(239,68,68,0.2)',
+            textAlign: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              right: '0',
+              height: '2px',
+              background: 'linear-gradient(90deg, #ef4444, #dc2626)'
+            }} />
+            <div style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              color: '#ef4444',
+              marginBottom: '4px'
+            }}>
+              {errorCount}
+            </div>
+            <div style={{ color: '#fca5a5', fontWeight: '500' }}>Errors</div>
+          </div>
+
+          {/* Current Streak */}
+          <div style={{
+            padding: '12px',
+            background: 'linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(59,130,246,0.08) 100%)',
+            borderRadius: '12px',
+            border: '1px solid rgba(59,130,246,0.2)',
+            textAlign: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              right: '0',
+              height: '2px',
+              background: 'linear-gradient(90deg, #3b82f6, #2563eb)'
+            }} />
+            <div style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              color: '#3b82f6',
+              marginBottom: '4px'
+            }}>
+              {successStreak}
+            </div>
+            <div style={{ color: '#93c5fd', fontWeight: '500' }}>Streak</div>
+          </div>
+
+          {/* Longest Streak */}
+          <div style={{
+            padding: '12px',
+            background: 'linear-gradient(135deg, rgba(168,85,247,0.15) 0%, rgba(168,85,247,0.08) 100%)',
+            borderRadius: '12px',
+            border: '1px solid rgba(168,85,247,0.2)',
+            textAlign: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              right: '0',
+              height: '2px',
+              background: 'linear-gradient(90deg, #a855f7, #9333ea)'
+            }} />
+            <div style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              color: '#a855f7',
+              marginBottom: '4px'
+            }}>
+              {longestStreak}
+            </div>
+            <div style={{ color: '#c4b5fd', fontWeight: '500' }}>Best Streak</div>
+          </div>
+        </div>
+
+        {/* Accuracy Bar */}
+        <div style={{
+          marginTop: '16px',
+          padding: '12px',
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: '10px',
+          border: '1px solid rgba(255,255,255,0.1)'
         }}>
           <div style={{
-            textAlign: 'center',
-            padding: '8px',
-            backgroundColor: 'rgba(34,197,94,0.2)',
-            borderRadius: '8px',
-            color: '#4ade80'
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '8px'
           }}>
-            <div style={{ fontWeight: 'bold' }}>{correctNotes}</div>
-            <div>Correct</div>
+            <span style={{ color: '#e4e4f4', fontWeight: '500' }}>Accuracy</span>
+            <span style={{ 
+              color: '#ffffff', 
+              fontWeight: 'bold',
+              fontSize: '16px'
+            }}>
+              {totalChords > 0 ? Math.round((correctChords / totalChords) * 100) : 0}%
+            </span>
           </div>
           <div style={{
-            textAlign: 'center',
-            padding: '8px',
-            backgroundColor: 'rgba(239,68,68,0.2)',
-            borderRadius: '8px',
-            color: '#f87171'
+            width: '100%',
+            height: '8px',
+            backgroundColor: 'rgba(255,255,255,0.1)',
+            borderRadius: '4px',
+            overflow: 'hidden'
           }}>
-            <div style={{ fontWeight: 'bold' }}>{extraNotes}</div>
-            <div>Extra</div>
-          </div>
-          <div style={{
-            textAlign: 'center',
-            padding: '8px',
-            backgroundColor: 'rgba(234,179,8,0.2)',
-            borderRadius: '8px',
-            color: '#fde047'
-          }}>
-            <div style={{ fontWeight: 'bold' }}>{missingNotes}</div>
-            <div>Missing</div>
-          </div>
-          <div style={{
-            textAlign: 'center',
-            padding: '8px',
-            backgroundColor: 'rgba(59,130,246,0.2)',
-            borderRadius: '8px',
-            color: '#60a5fa'
-          }}>
-            <div style={{ fontWeight: 'bold' }}>{errorCount}</div>
-            <div>Errors</div>
-          </div>
-          <div style={{
-            textAlign: 'center',
-            padding: '8px',
-            backgroundColor: 'rgba(16,185,129,0.2)',
-            borderRadius: '8px',
-            color: '#34d399'
-          }}>
-            <div style={{ fontWeight: 'bold' }}>{successStreak}</div>
-            <div>Streak ✅</div>
-          </div>
-          <div style={{
-            textAlign: 'center',
-            padding: '8px',
-            backgroundColor: 'rgba(239,68,68,0.3)',
-            borderRadius: '8px',
-            color: '#f87171'
-          }}>
-            <div style={{ fontWeight: 'bold' }}>{errorStreak}</div>
-            <div>Streak ❌</div>
+            <div style={{
+              width: `${totalChords > 0 ? (correctChords / totalChords) * 100 : 0}%`,
+              height: '100%',
+              background: 'linear-gradient(90deg, #22c55e, #16a34a)',
+              borderRadius: '4px',
+              transition: 'width 0.3s ease'
+            }} />
           </div>
         </div>
       </div>

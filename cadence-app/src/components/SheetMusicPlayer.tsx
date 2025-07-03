@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import OsmdViewer, { type OsmdViewerRef } from './OsmdViewer';
 import PerformanceMetricsDisplay from './PerformanceMetricsDisplay';
-import ChordDebugPanel from './ChordDebugPanel';
+import NotePanel from './NotePanel';
 import Metronome from './Metronome';
 import { ChordNavigator } from '../utils/ChordNavigator';
 import { PerformanceEvaluator } from '../utils/PerformanceEvaluator';
@@ -53,6 +53,8 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
   const [errorCount, setErrorCount] = useState(0);
   const [successStreak, setSuccessStreak] = useState(0);
   const [errorStreak, setErrorStreak] = useState(0);
+  const [correctChords, setCorrectChords] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
   
   // Refs
   const chordNavigatorRef = useRef<ChordNavigator | null>(null);
@@ -123,6 +125,8 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
       setErrorCount(state.errorCount);
       setSuccessStreak(state.successStreak);
       setErrorStreak(state.errorStreak);
+      setCorrectChords(state.correctChords);
+      setLongestStreak(state.longestStreak);
       
       // Initialize performance evaluator
       evaluatorRef.current = new PerformanceEvaluator(musicData.tempo || 120);
@@ -174,6 +178,8 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
         setErrorCount(state.errorCount);
         setSuccessStreak(state.successStreak);
         setErrorStreak(state.errorStreak);
+        setCorrectChords(state.correctChords);
+        setLongestStreak(state.longestStreak);
       }
     }
 
@@ -238,6 +244,8 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
     setErrorCount(0);
     setSuccessStreak(0);
     setErrorStreak(0);
+    setCorrectChords(0);
+    setLongestStreak(0);
   }, [isNavigationActive]);
 
   // Seek to specific chord
@@ -293,7 +301,7 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
               onClick={() => setShowDebugPanel(!showDebugPanel)} 
               className="button secondary"
             >
-              {showDebugPanel ? '🔍 Hide Debug' : '🔍 Show Debug'}
+              {showDebugPanel ? '🔍 Hide Note Panel' : '🔍 Show Note Panel'}
             </button>
             
             <div style={{ flex: 1, marginLeft: '20px' }}>
@@ -330,7 +338,7 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
         />
       </div>
 
-      {/* Debug panel */}
+      {/* Note panel */}
       {showDebugPanel && (
         <div style={{ 
           flex: 1, 
@@ -343,7 +351,7 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
           borderLeft: '1px solid #3a3a4a',
           backdropFilter: 'blur(10px)'
         }}>
-          <ChordDebugPanel
+          <NotePanel
             expectedNotes={expectedNotes}
             userInput={userInput}
             currentChordIndex={currentChordIndex}
@@ -353,6 +361,8 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             errorCount={errorCount}
             successStreak={successStreak}
             errorStreak={errorStreak}
+            correctChords={correctChords}
+            longestStreak={longestStreak}
           />
 
           {/* Metronome placed below debug panel */}
