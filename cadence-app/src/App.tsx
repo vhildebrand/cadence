@@ -3,6 +3,7 @@ import './App.css'
 import NoteFall from './components/NoteFall'
 import SheetMusicPlayer from './components/SheetMusicPlayer'
 import Profile from './components/Profile'
+import EarTrainingHub from './components/EarTrainingHub'
 import { PerformanceTracker } from './utils/PerformanceTracker'
 
 // Define the MIDI message type
@@ -56,7 +57,7 @@ interface SheetMusicData {
   };
 }
 
-type AppMode = 'interval-drill' | 'note-fall' | 'sheet-music' | 'profile';
+type AppMode = 'interval-drill' | 'note-fall' | 'sheet-music' | 'profile' | 'ear-training';
 
 function App() {
   const [currentMode, setCurrentMode] = useState<AppMode>('sheet-music');
@@ -408,6 +409,12 @@ function App() {
               Sheet Music
             </button>
             <button 
+              onClick={() => setCurrentMode('ear-training')}
+              className="button secondary"
+            >
+              Ear Training
+            </button>
+            <button 
               onClick={() => setCurrentMode('profile')}
               className="button secondary"
             >
@@ -462,6 +469,7 @@ function App() {
               <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
               <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
               <button onClick={() => setCurrentMode('sheet-music')} className="button primary">Sheet Music</button>
+              <button onClick={() => setCurrentMode('ear-training')} className="button secondary">Ear Training</button>
               <button onClick={() => setCurrentMode('profile')} className="button secondary">Profile</button>
             </nav>
             {/* ADDED FILE CONTROLS TO THE MAIN HEADER */}
@@ -515,6 +523,7 @@ function App() {
               <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
               <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
               <button onClick={() => setCurrentMode('sheet-music')} className="button secondary">Sheet Music</button>
+              <button onClick={() => setCurrentMode('ear-training')} className="button secondary">Ear Training</button>
               <button onClick={() => setCurrentMode('profile')} className="button primary">Profile</button>
             </nav>
           </div>
@@ -531,6 +540,41 @@ function App() {
           padding: '20px'
         }}>
           <Profile performanceTracker={performanceTracker} />
+        </div>
+      </div>
+    );
+  }
+
+  // Ear Training Hub mode
+  if (currentMode === 'ear-training') {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <div className="header-content">
+            <h1>🎹 Cadence</h1>
+            <nav className="mode-nav">
+              <button onClick={() => setCurrentMode('interval-drill')} className="button secondary">Interval Drill</button>
+              <button onClick={() => setCurrentMode('note-fall')} className="button secondary">Note Fall</button>
+              <button onClick={() => setCurrentMode('sheet-music')} className="button secondary">Sheet Music</button>
+              <button onClick={() => setCurrentMode('ear-training')} className="button primary">Ear Training</button>
+              <button onClick={() => setCurrentMode('profile')} className="button secondary">Profile</button>
+            </nav>
+          </div>
+          <div className="midi-status-compact">
+            <span className={`status-dot ${connectedDevices.length > 0 ? 'connected' : 'disconnected'}`}></span>
+            {connectedDevices.length > 0 ? `${connectedDevices.length} MIDI device(s)` : 'No MIDI'}
+          </div>
+        </header>
+
+        <div style={{ 
+          flex: 1, 
+          overflow: 'hidden', 
+          height: '100%'
+        }}>
+          <EarTrainingHub 
+            activeMidiNotes={activeMidiNotes}
+            onMidiMessage={handleMIDIMessage}
+          />
         </div>
       </div>
     );
@@ -560,6 +604,12 @@ function App() {
               className="button secondary"
             >
               Sheet Music
+            </button>
+            <button 
+              onClick={() => setCurrentMode('ear-training')}
+              className="button secondary"
+            >
+              Ear Training
             </button>
             <button 
               onClick={() => setCurrentMode('profile')}
