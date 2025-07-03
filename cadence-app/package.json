@@ -17,6 +17,7 @@
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^10.1.0",
     "jszip": "^3.10.1",
+    "openai": "^5.8.2",
     "opensheetmusicdisplay": "^1.9.0",
     "python-shell": "^5.0.0",
     "react": "^19.1.0",

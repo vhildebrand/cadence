@@ -6,6 +6,7 @@ import type { ScaleUserProfile, ScalePerformance, ScalePerformanceSession } from
 import { EarTrainingStatsManager } from '../utils/EarTrainingStats';
 import type { EarTrainingStats } from '../utils/EarTrainingStats';
 import { LessonPlannerTracker } from '../utils/LessonPlannerTracker';
+import { PerformanceDataCollector } from '../utils/PerformanceDataCollector';
 
 interface ProfileProps {
   performanceTracker: PerformanceTracker;
@@ -310,6 +311,13 @@ export default function Profile({ performanceTracker, scalePerformanceTracker, l
   const [activeTab, setActiveTab] = useState<'overview' | 'pieces' | 'recent' | 'ear-training' | 'scales' | 'lessons'>('overview');
   const [earTrainingStats, setEarTrainingStats] = useState<EarTrainingStats>(EarTrainingStatsManager.getStats());
   const [lessonStats, setLessonStats] = useState(lessonPlannerTracker?.getStatistics() || null);
+  
+  // OpenAI lesson generation state
+  const [isGeneratingLesson, setIsGeneratingLesson] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [generatedLesson, setGeneratedLesson] = useState<any>(null);
+  const [lessonError, setLessonError] = useState<string | null>(null);
 
   // Load profile data and subscribe to changes
   useEffect(() => {
@@ -365,6 +373,14 @@ export default function Profile({ performanceTracker, scalePerformanceTracker, l
     }
   }, [lessonPlannerTracker]);
 
+  // Load API key from localStorage
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('openai_api_key');
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+    }
+  }, []);
+
   // Get selected piece performance
   const selectedPiecePerformance = useMemo(() => {
     if (!selectedPiece) return null;
@@ -400,6 +416,98 @@ export default function Profile({ performanceTracker, scalePerformanceTracker, l
       streaks: trends.dates.map(date => ({ x: date, y: trends.streaks[trends.dates.indexOf(date)] || 0 }))
     };
   }, [selectedPiece, performanceTracker]);
+
+  // Handle OpenAI lesson generation
+  const handleGenerateLesson = async () => {
+    if (!apiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
+
+    setIsGeneratingLesson(true);
+    setLessonError(null);
+
+    try {
+      // Collect performance data
+      const performanceData = PerformanceDataCollector.collectAllPerformanceData(
+        performanceTracker,
+        scalePerformanceTracker,
+        lessonPlannerTracker
+      );
+
+      // Call OpenAI API through electron
+      const result = await (window as any).electronAPI.generateLessonWithOpenAI(performanceData, apiKey);
+      
+      if (result.success) {
+        setGeneratedLesson(result.data);
+        
+        // Show success toast
+        (window as any).showToast?.({
+          type: 'success',
+          title: 'Lesson Generated!',
+          message: 'Your personalized lesson plan has been created.',
+          duration: 4000
+        });
+      } else {
+        setLessonError(result.error || 'Failed to generate lesson');
+        
+        // Show error toast
+        (window as any).showToast?.({
+          type: 'error',
+          title: 'Lesson Generation Failed',
+          message: result.error || 'An error occurred while generating your lesson',
+          duration: 6000
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setLessonError(errorMessage);
+      
+      // Show error toast
+      (window as any).showToast?.({
+        type: 'error',
+        title: 'Lesson Generation Failed',
+        message: errorMessage,
+        duration: 6000
+      });
+    } finally {
+      setIsGeneratingLesson(false);
+    }
+  };
+
+  const handleSaveGeneratedLesson = () => {
+    if (!generatedLesson || !lessonPlannerTracker) return;
+
+    // Create lesson plan from generated data
+    const lessonPlan = {
+      title: generatedLesson.title,
+      description: generatedLesson.description,
+      difficulty: generatedLesson.difficulty,
+      estimatedDuration: generatedLesson.estimatedDuration,
+      activities: generatedLesson.activities.map((activity: any, index: number) => ({
+        id: `generated_activity_${Date.now()}_${index}`,
+        ...activity
+      })),
+      tags: ['AI Generated'],
+      isTemplate: false,
+      createdBy: 'system' as 'system'
+    };
+
+    const lessonId = lessonPlannerTracker.createLessonPlan(lessonPlan);
+    
+    if (lessonId) {
+      // Show success toast
+      (window as any).showToast?.({
+        type: 'success',
+        title: 'Lesson Plan Saved!',
+        message: 'Your AI-generated lesson has been added to your lesson planner.',
+        duration: 4000
+      });
+      
+      // Clear generated lesson
+      setGeneratedLesson(null);
+    }
+  };
 
   if (!profile) {
     return (
@@ -627,6 +735,165 @@ export default function Profile({ performanceTracker, scalePerformanceTracker, l
                 color="#3b82f6"
               />
             </div>
+          </div>
+
+          {/* AI Lesson Generation */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            marginBottom: '24px'
+          }}>
+            <h3 style={{ 
+              margin: '0 0 16px 0', 
+              color: '#ffffff',
+              fontSize: '18px',
+              fontWeight: '600'
+            }}>
+              🤖 AI Lesson Generation
+            </h3>
+            <p style={{ 
+              color: '#6c757d',
+              fontSize: '14px',
+              marginBottom: '16px',
+              lineHeight: '1.5'
+            }}>
+              Generate personalized lesson plans based on your performance data using OpenAI. 
+              The AI will analyze your strengths and weaknesses to create tailored practice sessions.
+            </p>
+
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              marginBottom: '16px'
+            }}>
+              <button
+                onClick={handleGenerateLesson}
+                disabled={isGeneratingLesson}
+                style={{
+                  padding: '12px 24px',
+                  background: isGeneratingLesson 
+                    ? 'rgba(255,255,255,0.1)' 
+                    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#ffffff',
+                  cursor: isGeneratingLesson ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  opacity: isGeneratingLesson ? 0.6 : 1,
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {isGeneratingLesson ? '🔄 Generating...' : '✨ Generate AI Lesson'}
+              </button>
+
+              {!apiKey && (
+                <button
+                  onClick={() => setShowApiKeyModal(true)}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '8px',
+                    color: '#e4e4f4',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  🔑 Set API Key
+                </button>
+              )}
+            </div>
+
+            {lessonError && (
+              <div style={{
+                padding: '12px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: '8px',
+                color: '#fca5a5',
+                fontSize: '14px',
+                marginBottom: '16px'
+              }}>
+                ❌ {lessonError}
+              </div>
+            )}
+
+            {generatedLesson && (
+              <div style={{
+                padding: '16px',
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.2)',
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <h4 style={{ 
+                  margin: '0 0 8px 0', 
+                  color: '#ffffff',
+                  fontSize: '16px',
+                  fontWeight: '600'
+                }}>
+                  📚 {generatedLesson.title}
+                </h4>
+                <p style={{ 
+                  color: '#6c757d',
+                  fontSize: '14px',
+                  marginBottom: '12px',
+                  lineHeight: '1.5'
+                }}>
+                  {generatedLesson.description}
+                </p>
+                <div style={{
+                  display: 'flex',
+                  gap: '16px',
+                  marginBottom: '12px',
+                  fontSize: '12px',
+                  color: '#6c757d'
+                }}>
+                  <span>Difficulty: {generatedLesson.difficulty}</span>
+                  <span>Duration: {generatedLesson.estimatedDuration} min</span>
+                  <span>Activities: {generatedLesson.activities?.length || 0}</span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  gap: '8px'
+                }}>
+                  <button
+                    onClick={handleSaveGeneratedLesson}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#22c55e',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    💾 Save to Lesson Planner
+                  </button>
+                  <button
+                    onClick={() => setGeneratedLesson(null)}
+                    style={{
+                      padding: '8px 16px',
+                      background: 'rgba(255,255,255,0.1)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '6px',
+                      color: '#e4e4f4',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    ✖️ Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1600,6 +1867,108 @@ export default function Profile({ performanceTracker, scalePerformanceTracker, l
           Clear All Data
         </button>
       </div>
+
+      {/* API Key Modal */}
+      {showApiKeyModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'rgba(42, 42, 62, 0.95)',
+            border: '1px solid #3a3a4a',
+            borderRadius: '16px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            backdropFilter: 'blur(10px)'
+          }}>
+            <h3 style={{
+              margin: '0 0 16px 0',
+              color: '#ffffff',
+              fontSize: '18px',
+              fontWeight: '600'
+            }}>
+              🔑 OpenAI API Key
+            </h3>
+            <p style={{
+              color: '#6c757d',
+              fontSize: '14px',
+              marginBottom: '16px',
+              lineHeight: '1.5'
+            }}>
+              Enter your OpenAI API key to generate personalized lesson plans. 
+              Your API key is stored locally and only used for generating lessons.
+            </p>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-..."
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                color: '#ffffff',
+                fontSize: '14px',
+                marginBottom: '16px'
+              }}
+            />
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => setShowApiKeyModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '6px',
+                  color: '#e4e4f4',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (apiKey.trim()) {
+                    setShowApiKeyModal(false);
+                    // Optionally save API key to localStorage
+                    localStorage.setItem('openai_api_key', apiKey);
+                  }
+                }}
+                disabled={!apiKey.trim()}
+                style={{
+                  padding: '8px 16px',
+                  background: apiKey.trim() ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#ffffff',
+                  cursor: apiKey.trim() ? 'pointer' : 'not-allowed',
+                  fontSize: '14px',
+                  opacity: apiKey.trim() ? 1 : 0.5
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

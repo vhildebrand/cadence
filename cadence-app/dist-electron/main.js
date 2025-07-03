@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -318,5 +351,115 @@ electron_1.ipcMain.handle('read-musicxml-file', async (event, filePath) => {
     }
     catch (err) {
         return { success: false, error: err.message };
+    }
+});
+// OpenAI lesson generation IPC handler
+electron_1.ipcMain.handle('generate-lesson-with-openai', async (event, performanceData, apiKey) => {
+    try {
+        // Dynamic import of OpenAI since we're in CommonJS context
+        const { OpenAI } = await Promise.resolve().then(() => __importStar(require('openai')));
+        const openai = new OpenAI({
+            apiKey: apiKey,
+        });
+        // Format the performance data for the prompt
+        const prompt = `You are a professional piano teacher and lesson planner. Based on the following performance data, create a personalized lesson plan for this student. The lesson should address their strengths and weaknesses, and help them improve their piano skills.
+
+Performance Data:
+${JSON.stringify(performanceData, null, 2)}
+
+Please create a comprehensive lesson plan with the following structure:
+1. A title that reflects the student's current level and focus areas
+2. A brief description of what the lesson aims to accomplish
+3. Estimated duration (in minutes)
+4. A list of activities, where each activity has:
+   - A descriptive title
+   - A clear description of what to do
+   - Type (scale, piece, ear-training, or custom)
+   - Difficulty level (beginner, intermediate, advanced)
+   - Target duration
+   - Specific configuration parameters relevant to the activity type
+
+Return the response as a JSON object with this exact structure:
+{
+  "title": "string",
+  "description": "string", 
+  "difficulty": "beginner" | "intermediate" | "advanced",
+  "estimatedDuration": number,
+  "activities": [
+    {
+      "title": "string",
+      "description": "string",
+      "type": "scale" | "piece" | "ear-training" | "custom",
+      "difficulty": "beginner" | "intermediate" | "advanced",
+      "targetDuration": number,
+      "scaleConfig": {
+        "scaleName": "string",
+        "rootNote": "string", 
+        "octave": number,
+        "tempo": number,
+        "metronomeEnabled": boolean
+      },
+      "earTrainingConfig": {
+        "exerciseType": "interval" | "chord" | "scale-identification",
+        "difficulty": "easy" | "medium" | "hard",
+        "questionCount": number
+      },
+      "customConfig": {
+        "instructions": "string",
+        "notes": "string"
+      }
+    }
+  ]
+}
+
+Focus on:
+- Addressing areas where the student shows weakness (low accuracy, short streaks)
+- Building on their strengths and favorite activity types
+- Providing progressive difficulty 
+- Including variety to keep lessons engaging
+- Specific, actionable instructions`;
+        const response = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are a professional piano teacher creating personalized lesson plans. Always respond with valid JSON only, no additional text or formatting.'
+                },
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.7,
+            max_tokens: 2000,
+        });
+        const content = response.choices[0]?.message?.content?.trim();
+        if (!content) {
+            return {
+                success: false,
+                error: 'No content received from OpenAI'
+            };
+        }
+        try {
+            // Parse the JSON response
+            const lessonPlan = JSON.parse(content);
+            return {
+                success: true,
+                data: lessonPlan
+            };
+        }
+        catch (parseError) {
+            return {
+                success: false,
+                error: `Failed to parse OpenAI response: ${parseError}`
+            };
+        }
+    }
+    catch (error) {
+        console.error('OpenAI lesson generation error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
+        };
     }
 });
