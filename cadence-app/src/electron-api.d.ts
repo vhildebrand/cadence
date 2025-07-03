@@ -9,6 +9,9 @@ interface ElectronAPI {
   parseSheetMusic: (filePath: string) => Promise<{ success: boolean; data?: any; error?: string }>;
   readMusicXMLFile: (filePath: string) => Promise<{ success: boolean; data?: string; error?: string; isBinary?: boolean }>;
   generateLessonWithOpenAI: (performanceData: any, apiKey: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+  generatePerformanceFeedback: (performanceSession: any, apiKey: string) => Promise<{ success: boolean; data?: { feedback: string }; error?: string }>;
+  generateTTS: (text: string, voiceName?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+  readAudioFile: (filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>;
 }
 
 declare global {

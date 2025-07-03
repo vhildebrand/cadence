@@ -469,4 +469,233 @@ Focus on:
     };
   }
 });
+
+// OpenAI performance feedback generation IPC handler
+ipcMain.handle('generate-performance-feedback', async (event, performanceSession: any, apiKey: string) => {
+  try {
+    // Dynamic import of OpenAI since we're in CommonJS context
+    const { OpenAI } = await import('openai');
+    
+    const openai = new OpenAI({
+      apiKey: apiKey,
+    });
+
+    // Calculate performance metrics for the prompt
+    const accuracy = performanceSession.accuracy;
+    const errorRate = performanceSession.errorCount / Math.max(performanceSession.totalChords, 1);
+    const streakRatio = performanceSession.longestStreak / Math.max(performanceSession.totalChords, 1);
+    const completionTime = performanceSession.duration;
+
+    // Determine feedback tone based on performance
+    let feedbackTone;
+    if (accuracy >= 95) {
+      feedbackTone = "very encouraging and congratulatory";
+    } else if (accuracy >= 85) {
+      feedbackTone = "encouraging with gentle suggestions";
+    } else if (accuracy >= 70) {
+      feedbackTone = "supportive but with clear areas for improvement";
+    } else if (accuracy >= 50) {
+      feedbackTone = "constructively critical with specific advice";
+    } else {
+      feedbackTone = "firm but motivating, focusing on fundamental practice needs";
+    }
+
+    const prompt = `You are a piano teacher providing feedback to a student who just completed playing "${performanceSession.pieceTitle}". 
+
+Performance Details:
+- Accuracy: ${accuracy.toFixed(1)}%
+- Errors: ${performanceSession.errorCount} out of ${performanceSession.totalChords} chords
+- Longest correct streak: ${performanceSession.longestStreak} chords
+- Total duration: ${Math.round(completionTime)}s
+- Piece: ${performanceSession.pieceTitle}
+${performanceSession.composer ? `- Composer: ${performanceSession.composer}` : ''}
+
+Provide feedback that is ${feedbackTone}. The feedback should:
+- Be 1-2 sentences long
+- Address the specific performance metrics
+- Be spoken as if you're speaking directly to the student
+- Include specific advice or encouragement based on their performance level
+- Sound natural when spoken aloud
+
+Do NOT use any special formatting, emojis, or symbols. Just provide plain text that sounds natural when spoken.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a piano teacher providing direct, spoken feedback to a student. Respond with natural speech that sounds good when converted to audio.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.8,
+      max_tokens: 200,
+    });
+
+    const content = response.choices[0]?.message?.content?.trim();
+    if (!content) {
+      return {
+        success: false,
+        error: 'No content received from OpenAI'
+      };
+    }
+
+    return {
+      success: true,
+      data: { feedback: content }
+    };
+
+  } catch (error) {
+    console.error('OpenAI feedback generation error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+});
+
+// TTS generation using Python script with gradio_client
+ipcMain.handle('generate-tts', async (event, text: string, voiceName: string = 'af_heart') => {
+  return new Promise((resolve) => {
+    const scriptsDir = path.join(__dirname, '..', 'scripts');
+    const scriptName = 'tts_generator.py';
+    
+    // Use system Python3
+    const pythonPath = process.platform === 'win32' 
+      ? 'python'
+      : 'python3';
+    
+    const options = {
+      mode: 'text' as const,
+      pythonPath: pythonPath,
+      scriptPath: scriptsDir,
+      args: [text, voiceName, 'wav', '1.0'],
+    };
+
+    console.log('Generating TTS with Python script:', scriptName);
+    console.log('Text:', text);
+    console.log('Voice:', voiceName);
+
+    const shell = new PythonShell(scriptName, options);
+    let output: string[] = [];
+    let errorOutput: string[] = [];
+
+    shell.on('message', (message) => {
+      console.log('TTS Python output:', message);
+      output.push(message);
+    });
+
+    shell.on('stderr', (stderr) => {
+      console.error('TTS Python stderr:', stderr);
+      errorOutput.push(stderr);
+    });
+
+    shell.on('close', () => {
+      if (output.length > 0) {
+        try {
+          // Try to parse the JSON output
+          const fullOutput = output.join('\n');
+          
+          // Find JSON in the output (look for lines starting with '{')
+          const lines = fullOutput.split('\n');
+          let jsonLine = '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+              jsonLine = trimmed;
+              break;
+            }
+          }
+          
+          if (!jsonLine) {
+            // Fallback: try parsing the entire output
+            jsonLine = fullOutput;
+          }
+          
+          console.log('Attempting to parse JSON:', jsonLine);
+          const result = JSON.parse(jsonLine);
+          
+                     if (result.success) {
+             // Convert file path to accessible URL
+             let audioUrl = result.audio_path;
+             if (typeof audioUrl === 'string' && audioUrl.startsWith('/')) {
+               audioUrl = `http://127.0.0.1:7860/file=${audioUrl}`;
+             }
+             
+             console.log('TTS generated successfully:', audioUrl);
+             console.log('Original file path:', result.audio_path);
+             
+             // Also provide the original file path for alternative access methods
+             resolve({ 
+               success: true, 
+               data: audioUrl,
+               filePath: result.audio_path,
+               message: result.message
+             });
+          } else {
+            resolve({ 
+              success: false, 
+              error: result.error || 'TTS generation failed'
+            });
+          }
+        } catch (parseError) {
+          resolve({ 
+            success: false, 
+            error: `Failed to parse TTS script output: ${parseError}` 
+          });
+        }
+      } else if (errorOutput.length > 0) {
+        resolve({ 
+          success: false, 
+          error: `TTS script error: ${errorOutput.join('\n')}` 
+        });
+      } else {
+        resolve({ 
+          success: false, 
+          error: 'No output from TTS script' 
+        });
+      }
+    });
+
+    shell.on('error', (err) => {
+      console.error('TTS Python shell error:', err);
+      resolve({ 
+        success: false, 
+        error: `Python shell error: ${err.message}` 
+      });
+    });
+  });
+});
+
+// Read audio file and convert to data URL for reliable playback
+ipcMain.handle('read-audio-file', async (event, filePath: string) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return {
+        success: false,
+        error: 'Audio file not found'
+      };
+    }
+
+    const audioBuffer = fs.readFileSync(filePath);
+    const base64Audio = audioBuffer.toString('base64');
+    const dataUrl = `data:audio/wav;base64,${base64Audio}`;
+    
+    console.log('Audio file read successfully, size:', audioBuffer.length, 'bytes');
+    
+    return {
+      success: true,
+      data: dataUrl
+    };
+  } catch (error) {
+    console.error('Error reading audio file:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to read audio file'
+    };
+  }
+});
   

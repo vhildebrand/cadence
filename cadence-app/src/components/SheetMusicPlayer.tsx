@@ -79,15 +79,9 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
     if (musicData) {
       console.log('Initializing chord navigator with music data');
       
-      // Create chord navigator with configurable chord bundling options
+      // Create chord navigator
       chordNavigatorRef.current = new ChordNavigator({
         requireExactMatch: true,
-        // Adjust these parameters to change chord bundling behavior:
-        timeTolerance: 0.01,          // Increase for more lenient timing (default: 0.0001)
-        minChordSize: 1,              // Minimum notes to consider a chord (default: 1)
-        maxChordGap: 0.25,            // Maximum gap between notes to group them (default: 0.1)
-        groupByBeat: false,           // Set to true for beat-based grouping (default: false)
-        beatSubdivision: 4,           // Subdivisions per beat (default: 4)
         onChordChange: (chord, index) => {
           console.log(`Chord changed to index ${index}:`, chord);
           setCurrentChordIndex(index);
@@ -109,7 +103,7 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             setIsChordComplete(false);
           }, 500);
         },
-        onNavigationComplete: () => {
+        onNavigationComplete: async () => {
           console.log('Navigation completed!');
           
           // Get final state before completing session
@@ -127,6 +121,10 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             const completedSession = performanceTracker.completeSession();
             if (completedSession) {
               console.log('Performance session completed automatically:', completedSession);
+              
+              // Generate AI feedback and TTS
+              await generateAndPlayFeedback(completedSession);
+              
               // Show completion message
               setShowCompletionMessage(true);
               setTimeout(() => setShowCompletionMessage(false), 3000);
@@ -170,6 +168,101 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
       setIsNavigationActive(false);
     }
   }, [musicData]);
+
+  // Generate AI feedback and play TTS
+  const generateAndPlayFeedback = async (session: any) => {
+    try {
+      // Get API key from localStorage
+      const apiKey = localStorage.getItem('openai_api_key');
+      if (!apiKey) {
+        console.log('No OpenAI API key found, skipping AI feedback');
+        return;
+      }
+
+      // Generate AI feedback
+      const feedbackResult = await (window as any).electronAPI.generatePerformanceFeedback(session, apiKey);
+      
+      if (feedbackResult.success) {
+        console.log('AI feedback generated:', feedbackResult.data.feedback);
+        
+        // Convert feedback to speech using af_heart voice
+        const ttsResult = await (window as any).electronAPI.generateTTS(feedbackResult.data.feedback, 'af_heart');
+        
+        if (ttsResult.success) {
+          console.log('TTS audio generated successfully');
+          console.log('TTS result data:', ttsResult.data);
+          
+          // Play the audio
+          if (ttsResult.data && typeof ttsResult.data === 'string') {
+            console.log('Attempting to play audio from URL:', ttsResult.data);
+            
+            // Create audio element and set up event listeners for debugging
+            const audio = new Audio();
+            
+            // Add event listeners for debugging
+            audio.addEventListener('loadstart', () => console.log('Audio loading started'));
+            audio.addEventListener('canplay', () => console.log('Audio can play'));
+            audio.addEventListener('loadeddata', () => console.log('Audio data loaded'));
+            audio.addEventListener('error', (e) => console.error('Audio error event:', e));
+            audio.addEventListener('ended', () => console.log('Audio playback ended'));
+            
+            // Set the source and attempt to play
+            audio.src = ttsResult.data;
+            audio.crossOrigin = 'anonymous'; // Handle CORS issues
+            
+                         audio.play().then(() => {
+               console.log('Audio playback started successfully');
+             }).catch(async (error) => {
+               console.error('Error playing TTS audio via URL:', error);
+               
+               // Try reading the file directly as fallback
+               if (ttsResult.filePath) {
+                 console.log('Trying to read audio file directly:', ttsResult.filePath);
+                 
+                 try {
+                   const audioFileResult = await (window as any).electronAPI.readAudioFile(ttsResult.filePath);
+                   
+                   if (audioFileResult.success) {
+                     console.log('Audio file read successfully, playing data URL');
+                     const fallbackAudio = new Audio(audioFileResult.data);
+                     
+                     fallbackAudio.addEventListener('error', (e) => console.error('Fallback audio error:', e));
+                     fallbackAudio.addEventListener('canplay', () => console.log('Fallback audio can play'));
+                     
+                     fallbackAudio.play().then(() => {
+                       console.log('Fallback audio playback started successfully');
+                     }).catch(fallbackError => {
+                       console.error('Fallback audio playback failed:', fallbackError);
+                     });
+                   } else {
+                     console.error('Failed to read audio file:', audioFileResult.error);
+                   }
+                 } catch (readError) {
+                   console.error('Error reading audio file:', readError);
+                 }
+               }
+             });
+          } else if (ttsResult.data && ttsResult.data.url) {
+            // If it's an object with a URL property
+            console.log('Attempting to play audio from object URL:', ttsResult.data.url);
+            const audio = new Audio(ttsResult.data.url);
+            audio.crossOrigin = 'anonymous';
+            audio.play().catch(error => {
+              console.error('Error playing TTS audio:', error);
+            });
+          } else {
+            console.warn('TTS result data format not recognized:', ttsResult.data);
+          }
+        } else {
+          console.error('TTS generation failed:', ttsResult.error);
+        }
+      } else {
+        console.error('AI feedback generation failed:', feedbackResult.error);
+      }
+    } catch (error) {
+      console.error('Error in generateAndPlayFeedback:', error);
+    }
+  };
 
   // Handle MIDI input changes
   useEffect(() => {

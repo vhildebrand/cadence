@@ -6,6 +6,9 @@ langchain-core>=0.3.0
 # Music processing dependencies
 music21>=9.1.0
 
+# TTS integration
+gradio_client>=0.8.0
+
 # Optional: For future ML/adaptive learning features
 # numpy>=1.24.0
 # scikit-learn>=1.3.0 
