@@ -362,7 +362,18 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
     }
   }, [zoom]);
 
-    return <div ref={containerRef} style={{ width: '100%', minHeight: '400px' }} />;
+    return (
+      <div 
+        ref={containerRef} 
+        className={`osmd-container ${!musicXml ? 'osmd-empty' : ''}`}
+        style={{ 
+          width: '100%', 
+          minHeight: musicXml ? '400px' : '0px',
+          backgroundColor: musicXml ? 'white' : 'transparent',
+          transition: 'all 0.3s ease'
+        }} 
+      />
+    );
   }
 );
 

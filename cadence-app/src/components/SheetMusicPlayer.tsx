@@ -320,8 +320,18 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
   return (
     <div className="sheet-music-player" style={{ display: 'flex', flex: 1, overflow: 'hidden', height: '100%' }}>
       {/* Main sheet music area */}
-      <div style={{ flex: showDebugPanel ? 2 : 3, overflow: 'auto', padding: '20px', backgroundColor: '#fff', color: '#000' }}>
-        {musicData && (
+      <div style={{ 
+        flex: showDebugPanel ? 2 : 3, 
+        overflow: 'auto', 
+        padding: '20px', 
+        backgroundColor: musicData ? '#fff' : 'transparent',
+        color: musicData ? '#000' : '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: musicData ? 'flex-start' : 'center',
+        alignItems: musicData ? 'stretch' : 'center'
+      }}>
+        {musicData ? (
           <>
             {/* Completion Message */}
             {showCompletionMessage && (
@@ -411,6 +421,22 @@ export default function SheetMusicPlayer({ activeMidiNotes, onMidiMessage, music
             showCursor={isNavigationActive}
           />
           </>
+        ) : (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            gap: '20px',
+            opacity: 0.7
+          }}>
+            <div style={{ fontSize: '4rem', marginBottom: '10px' }}>🎼</div>
+            <h3 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>No Sheet Music Loaded</h3>
+            <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-secondary)', maxWidth: '300px' }}>
+              Load a MusicXML file using the "Load MusicXML" button in the header to get started.
+            </p>
+          </div>
         )}
       </div>
 

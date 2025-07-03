@@ -118,9 +118,25 @@
 }
 
 /* Fix for VexFlow and general text visibility */
-.vexflow-container, .vexflow-container * {
+.vexflow-container:not(:empty), .vexflow-container:not(:empty) * {
   color: #333333 !important;
   background-color: white !important;
+}
+
+/* VexFlow container when empty should be transparent */
+.vexflow-container:empty {
+  background-color: transparent !important;
+}
+
+/* OSMD container styling */
+.osmd-container {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.osmd-container.osmd-empty {
+  border: none;
+  background: transparent !important;
 }
 
 /* Ensure all text is visible by default */
