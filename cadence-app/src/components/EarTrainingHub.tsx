@@ -296,27 +296,6 @@ const EarTrainingHub: React.FC<EarTrainingHubProps> = ({
     <div className="ear-training-hub">
       <div className="hub-header">
         <h2>🎵 Ear Training Hub</h2>
-        <p>Listen to notes, intervals, and chords, then play them back on your MIDI keyboard</p>
-      </div>
-
-      {/* Statistics */}
-      <div className="stats-panel">
-        <div className="stat-card">
-          <div className="stat-value">{stats.totalSessions}</div>
-          <div className="stat-label">Total Exercises</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{accuracyPercentage}%</div>
-          <div className="stat-label">Accuracy</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{stats.currentStreak}</div>
-          <div className="stat-label">Current Streak</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{stats.bestStreak}</div>
-          <div className="stat-label">Best Streak</div>
-        </div>
       </div>
 
       {/* Exercise Configuration */}
@@ -345,6 +324,26 @@ const EarTrainingHub: React.FC<EarTrainingHubProps> = ({
             <option value="medium">Medium</option>
             <option value="hard">Hard</option>
           </select>
+        </div>
+      </div>
+
+      {/* Statistics */}
+      <div className="stats-panel">
+        <div className="stat-card">
+          <div className="stat-label">Total Exercises</div>
+          <div className="stat-value">{stats.totalSessions}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Accuracy</div>
+          <div className="stat-value">{accuracyPercentage}%</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Current Streak</div>
+          <div className="stat-value">{stats.currentStreak}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Best Streak</div>
+          <div className="stat-value">{stats.bestStreak}</div>
         </div>
       </div>
 
@@ -447,19 +446,6 @@ const EarTrainingHub: React.FC<EarTrainingHubProps> = ({
             )}
           </div>
         )}
-      </div>
-
-      {/* Instructions */}
-      <div className="instructions">
-        <h3>How to Play:</h3>
-        <ol>
-          <li>Choose your exercise type and difficulty</li>
-          <li>Click "Start Exercise" to begin</li>
-          <li>Listen carefully to the notes/chords played</li>
-          <li>Play the same notes on your MIDI keyboard</li>
-          <li>Your answer will be automatically checked when you play the correct number of notes</li>
-          <li>Or click "Check Answer" to manually submit</li>
-        </ol>
       </div>
     </div>
   );
