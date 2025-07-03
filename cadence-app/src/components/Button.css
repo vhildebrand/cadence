@@ -1,0 +1,343 @@
+/* Modern Button Base Styles */
+.modern-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-xl);
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  overflow: hidden;
+  text-decoration: none;
+  user-select: none;
+  outline: none;
+  z-index: 1;
+}
+
+.modern-button:focus-visible {
+  outline: 2px solid var(--primary-400);
+  outline-offset: 2px;
+}
+
+/* Button Content */
+.modern-button__content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  z-index: 2;
+}
+
+.modern-button__text {
+  font-weight: inherit;
+  letter-spacing: 0.01em;
+}
+
+.modern-button__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-fast);
+}
+
+.modern-button__icon--left {
+  margin-right: var(--spacing-xs);
+}
+
+.modern-button__icon--right {
+  margin-left: var(--spacing-xs);
+}
+
+/* Ripple Effect */
+.modern-button__ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0);
+  animation: ripple 0.6s ease-out;
+  z-index: 1;
+}
+
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Shine Effect */
+.modern-button__shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transition: left var(--transition-slow);
+  z-index: 1;
+}
+
+.modern-button:hover .modern-button__shine {
+  left: 100%;
+}
+
+/* Size Variants */
+.modern-button--small {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.875rem;
+  min-height: 32px;
+}
+
+.modern-button--medium {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: 1rem;
+  min-height: 40px;
+}
+
+.modern-button--large {
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: 1.1rem;
+  min-height: 48px;
+  border-radius: var(--radius-2xl);
+}
+
+/* Full Width */
+.modern-button--full-width {
+  width: 100%;
+}
+
+/* Color Variants */
+.modern-button--primary {
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.modern-button--primary:hover:not(.modern-button--disabled):not(.modern-button--loading) {
+  background: linear-gradient(135deg, var(--primary-400), var(--primary-500));
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.modern-button--primary:active {
+  transform: translateY(0);
+}
+
+.modern-button--secondary {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.modern-button--secondary:hover:not(.modern-button--disabled):not(.modern-button--loading) {
+  background: var(--glass-hover);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.modern-button--success {
+  background: linear-gradient(135deg, var(--accent-500), var(--accent-600));
+  color: white;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.modern-button--success:hover:not(.modern-button--disabled):not(.modern-button--loading) {
+  background: linear-gradient(135deg, var(--accent-400), var(--accent-500));
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
+}
+
+.modern-button--danger {
+  background: linear-gradient(135deg, var(--error-500), var(--error-600));
+  color: white;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.modern-button--danger:hover:not(.modern-button--disabled):not(.modern-button--loading) {
+  background: linear-gradient(135deg, var(--error-400), var(--error-500));
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+.modern-button--ghost {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid transparent;
+}
+
+.modern-button--ghost:hover:not(.modern-button--disabled):not(.modern-button--loading) {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  transform: translateY(-1px);
+}
+
+.modern-button--gradient {
+  background: linear-gradient(135deg, var(--primary-400), var(--secondary-400), var(--accent-400));
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+}
+
+.modern-button--gradient:hover:not(.modern-button--disabled):not(.modern-button--loading) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+  animation-duration: 1s;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* States */
+.modern-button--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.modern-button--loading {
+  cursor: default;
+  pointer-events: none;
+}
+
+.modern-button--clicked {
+  transform: scale(0.98);
+}
+
+.modern-button--animated:hover:not(.modern-button--disabled):not(.modern-button--loading) {
+  animation: buttonFloat 2s ease-in-out infinite;
+}
+
+@keyframes buttonFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1px);
+  }
+}
+
+/* Icon Animations */
+.modern-button:hover .modern-button__icon {
+  transform: scale(1.1);
+}
+
+.modern-button--primary:hover .modern-button__icon--right {
+  transform: translateX(2px) scale(1.1);
+}
+
+.modern-button--secondary:hover .modern-button__icon--left {
+  transform: translateX(-2px) scale(1.1);
+}
+
+/* Loading State */
+.modern-button--loading .modern-button__text {
+  opacity: 0.7;
+}
+
+/* Focus and Active States */
+.modern-button:focus-visible .modern-button__content {
+  transform: scale(1.02);
+}
+
+.modern-button:active .modern-button__content {
+  transform: scale(0.98);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .modern-button--large {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    font-size: 1rem;
+    min-height: 44px;
+  }
+  
+  .modern-button--medium {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.9rem;
+    min-height: 36px;
+  }
+  
+  .modern-button--small {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.8rem;
+    min-height: 32px;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .modern-button {
+    animation: none !important;
+    transition: none !important;
+  }
+  
+  .modern-button__shine {
+    display: none;
+  }
+  
+  .modern-button__ripple {
+    display: none;
+  }
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .modern-button--secondary {
+    background: var(--glass-bg);
+    color: var(--text-primary);
+  }
+  
+  .modern-button--ghost {
+    color: var(--text-primary);
+  }
+  
+  .modern-button--ghost:hover {
+    background: var(--glass-bg);
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .modern-button {
+    border: 2px solid;
+  }
+  
+  .modern-button--primary {
+    border-color: var(--primary-500);
+  }
+  
+  .modern-button--secondary {
+    border-color: var(--text-primary);
+  }
+  
+  .modern-button--success {
+    border-color: var(--accent-500);
+  }
+  
+  .modern-button--danger {
+    border-color: var(--error-500);
+  }
+} 

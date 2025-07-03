@@ -4,6 +4,9 @@ import NoteFall from './components/NoteFall'
 import SheetMusicPlayer from './components/SheetMusicPlayer'
 import Profile from './components/Profile'
 import EarTrainingHub from './components/EarTrainingHub'
+import Button from './components/Button'
+import LoadingSpinner from './components/LoadingSpinner'
+import { ToastContainer } from './components/Toast'
 import { PerformanceTracker } from './utils/PerformanceTracker'
 
 // Define the MIDI message type
@@ -226,6 +229,14 @@ function App() {
       setIsLoadingFile(true);
       setFileError(null);
       
+      // Show loading toast
+      (window as any).showToast?.({
+        type: 'info',
+        title: 'Loading Music File',
+        message: 'Selecting and parsing your MusicXML file...',
+        duration: 3000
+      });
+      
       const fileResult = await (window as any).electronAPI.selectMusicXMLFile();
       
       if (fileResult.canceled) {
@@ -252,10 +263,27 @@ function App() {
       setMusicXmlIsBinary(!!xmlResult.isBinary);
       console.log('Sheet music loaded:', parseResult.data);
       
+      // Show success toast
+      const filename = fileResult.filePath.split(/[\\/]/).pop() || 'music file';
+      (window as any).showToast?.({
+        type: 'success',
+        title: 'Music File Loaded!',
+        message: `Successfully loaded ${filename}`,
+        duration: 4000
+      });
+      
     } catch (error) {
       console.error('Error loading MusicXML file:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       setFileError(errorMessage);
+      
+      // Show error toast
+      (window as any).showToast?.({
+        type: 'error',
+        title: 'Failed to Load Music File',
+        message: errorMessage,
+        duration: 6000
+      });
     } finally {
       setIsLoadingFile(false);
     }
@@ -296,12 +324,29 @@ function App() {
         isActive: false // End current drill
       }));
       
+      // Show feedback toast
+      (window as any).showToast?.({
+        type: isCorrect ? 'success' : 'warning',
+        title: isCorrect ? 'Correct Answer!' : 'Try Again',
+        message: evaluation.feedback.replace(/[✅❌]/g, '').trim(),
+        duration: 4000
+      });
+      
     } catch (error) {
       console.error('Error evaluating answer:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setDrillState(prev => ({
         ...prev,
-        feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        feedback: `Error: ${errorMessage}`
       }));
+      
+      // Show error toast
+      (window as any).showToast?.({
+        type: 'error',
+        title: 'Evaluation Error',
+        message: errorMessage,
+        duration: 5000
+      });
     } finally {
       setIsRunningDrill(false);
     }
@@ -333,12 +378,29 @@ function App() {
         streak: drillData.streak || 0
       });
       
+      // Show success toast
+      (window as any).showToast?.({
+        type: 'info',
+        title: 'New Challenge Started!',
+        message: drillData.prompt,
+        duration: 3000
+      });
+      
     } catch (error) {
       console.error('Error starting drill:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setDrillState(prev => ({
         ...prev,
-        feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        feedback: `Error: ${errorMessage}`
       }));
+      
+      // Show error toast
+      (window as any).showToast?.({
+        type: 'error',
+        title: 'Failed to Start Drill',
+        message: errorMessage,
+        duration: 5000
+      });
     } finally {
       setIsRunningDrill(false);
     }
@@ -643,9 +705,14 @@ function App() {
             </div>
           )}
           
-          <button onClick={refreshMIDI} className="button secondary">
+          <Button 
+            onClick={refreshMIDI} 
+            variant="secondary" 
+            leftIcon="🔄"
+            animated
+          >
             Refresh MIDI Devices
-          </button>
+          </Button>
         </section>
 
         {/* Interval Drill Section */}
@@ -665,13 +732,18 @@ function App() {
 
           {!drillState.isActive ? (
             <div className="drill-controls">
-              <button 
+              <Button 
                 onClick={startIntervalDrill} 
                 disabled={isRunningDrill || connectedDevices.length === 0}
-                className="button primary large"
+                variant="gradient"
+                size="large"
+                loading={isRunningDrill}
+                loadingText="Starting Drill..."
+                leftIcon="🎯"
+                animated
               >
-                {isRunningDrill ? 'Starting Drill...' : 'Start Interval Drill'}
-              </button>
+                Start Interval Drill
+              </Button>
               {connectedDevices.length === 0 && (
                 <p className="warning">Connect a MIDI keyboard to start practicing</p>
               )}
@@ -710,16 +782,25 @@ function App() {
               </div>
 
               <div className="drill-controls">
-                <button 
+                <Button 
                   onClick={evaluateAnswer} 
                   disabled={isRunningDrill || activeMidiNotes.size === 0}
-                  className="button primary"
+                  variant="success"
+                  loading={isRunningDrill}
+                  loadingText="Evaluating..."
+                  leftIcon="✅"
+                  animated
                 >
-                  {isRunningDrill ? 'Evaluating...' : 'Submit Answer'}
-                </button>
-                <button onClick={resetDrill} className="button secondary">
+                  Submit Answer
+                </Button>
+                <Button 
+                  onClick={resetDrill} 
+                  variant="danger"
+                  leftIcon="🔄"
+                  animated
+                >
                   Reset
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -800,6 +881,9 @@ function App() {
           )}
         </section>
       </main>
+
+      {/* Toast notifications */}
+      <ToastContainer position="top-right" maxToasts={3} />
     </div>
   )
 }
