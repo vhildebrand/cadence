@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './EarTrainingHub.css';
+import { EarTrainingStatsManager } from '../utils/EarTrainingStats';
+import type { EarTrainingStats } from '../utils/EarTrainingStats';
 
 interface ActiveNote {
   note: number;
@@ -7,13 +9,7 @@ interface ActiveNote {
   timestamp: number;
 }
 
-interface ExerciseStats {
-  totalExercises: number;
-  correctAnswers: number;
-  incorrectAnswers: number;
-  currentStreak: number;
-  bestStreak: number;
-}
+
 
 interface Exercise {
   id: string;
@@ -38,13 +34,7 @@ const EarTrainingHub: React.FC<EarTrainingHubProps> = ({
   const [userAnswer, setUserAnswer] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string>('');
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [stats, setStats] = useState<ExerciseStats>({
-    totalExercises: 0,
-    correctAnswers: 0,
-    incorrectAnswers: 0,
-    currentStreak: 0,
-    bestStreak: 0
-  });
+  const [stats, setStats] = useState<EarTrainingStats>(EarTrainingStatsManager.getStats());
   const [exerciseType, setExerciseType] = useState<'single-note' | 'interval' | 'chord'>('single-note');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
   const [isExerciseActive, setIsExerciseActive] = useState(false);
@@ -244,22 +234,21 @@ const EarTrainingHub: React.FC<EarTrainingHubProps> = ({
     
     if (isAnswerCorrect) {
       setFeedback('✅ Correct! Well done!');
-      setStats(prev => ({
-        ...prev,
-        totalExercises: prev.totalExercises + 1,
-        correctAnswers: prev.correctAnswers + 1,
-        currentStreak: prev.currentStreak + 1,
-        bestStreak: Math.max(prev.bestStreak, prev.currentStreak + 1)
-      }));
     } else {
       setFeedback(`❌ Incorrect. Expected: ${expectedNotes.map(n => noteNumberToName(n)).join(', ')}. You played: ${userNotes.map(n => noteNumberToName(n)).join(', ')}`);
-      setStats(prev => ({
-        ...prev,
-        totalExercises: prev.totalExercises + 1,
-        incorrectAnswers: prev.incorrectAnswers + 1,
-        currentStreak: 0
-      }));
     }
+
+    // Save session to persistent storage
+    EarTrainingStatsManager.addSession({
+      exerciseType: currentExercise.type,
+      difficulty: currentExercise.difficulty,
+      correct: isAnswerCorrect,
+      expectedNotes: currentExercise.notes,
+      userNotes: userNotes
+    });
+
+    // Update local stats
+    setStats(EarTrainingStatsManager.getStats());
     
     setIsWaitingForAnswer(false);
   }, [currentExercise, isWaitingForAnswer, activeMidiNotes]);
@@ -301,9 +290,7 @@ const EarTrainingHub: React.FC<EarTrainingHubProps> = ({
   };
 
   // Calculate accuracy percentage
-  const accuracyPercentage = stats.totalExercises > 0 
-    ? Math.round((stats.correctAnswers / stats.totalExercises) * 100) 
-    : 0;
+  const accuracyPercentage = Math.round(stats.averageAccuracy);
 
   return (
     <div className="ear-training-hub">
@@ -315,7 +302,7 @@ const EarTrainingHub: React.FC<EarTrainingHubProps> = ({
       {/* Statistics */}
       <div className="stats-panel">
         <div className="stat-card">
-          <div className="stat-value">{stats.totalExercises}</div>
+          <div className="stat-value">{stats.totalSessions}</div>
           <div className="stat-label">Total Exercises</div>
         </div>
         <div className="stat-card">

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { PerformanceTracker } from '../utils/PerformanceTracker';
 import type { UserProfile, PiecePerformance, PerformanceSession } from '../utils/PerformanceTracker';
+import { EarTrainingStatsManager } from '../utils/EarTrainingStats';
+import type { EarTrainingStats } from '../utils/EarTrainingStats';
 
 interface ProfileProps {
   performanceTracker: PerformanceTracker;
@@ -199,7 +201,8 @@ const SessionCard = ({ session }: { session: PerformanceSession }) => (
 export default function Profile({ performanceTracker }: ProfileProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'pieces' | 'recent'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pieces' | 'recent' | 'ear-training'>('overview');
+  const [earTrainingStats, setEarTrainingStats] = useState<EarTrainingStats>(EarTrainingStatsManager.getStats());
 
   // Load profile data and subscribe to changes
   useEffect(() => {
@@ -212,6 +215,19 @@ export default function Profile({ performanceTracker }: ProfileProps) {
 
     return unsubscribe;
   }, [performanceTracker]);
+
+  // Load ear training stats
+  useEffect(() => {
+    setEarTrainingStats(EarTrainingStatsManager.getStats());
+    
+    // Listen for storage changes (when ear training stats are updated)
+    const handleStorageChange = () => {
+      setEarTrainingStats(EarTrainingStatsManager.getStats());
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Get selected piece performance
   const selectedPiecePerformance = useMemo(() => {
@@ -348,6 +364,21 @@ export default function Profile({ performanceTracker }: ProfileProps) {
           }}
         >
           Recent Sessions
+        </button>
+        <button
+          onClick={() => setActiveTab('ear-training')}
+          style={{
+            padding: '8px 16px',
+            background: activeTab === 'ear-training' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+            border: 'none',
+            borderRadius: '8px',
+            color: activeTab === 'ear-training' ? '#ffffff' : '#e4e4f4',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '500'
+          }}
+        >
+          Ear Training ({earTrainingStats.totalSessions})
         </button>
       </div>
 
@@ -653,6 +684,227 @@ export default function Profile({ performanceTracker }: ProfileProps) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Ear Training Tab */}
+      {activeTab === 'ear-training' && (
+        <div>
+          <h3 style={{ 
+            margin: '0 0 16px 0', 
+            color: '#ffffff',
+            fontSize: '18px',
+            fontWeight: '600'
+          }}>
+            🎵 Ear Training Performance
+          </h3>
+          
+          {/* Overall Stats */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            <StatCard
+              title="Total Exercises"
+              value={earTrainingStats.totalSessions}
+              color="#22c55e"
+            />
+            <StatCard
+              title="Average Accuracy"
+              value={`${earTrainingStats.averageAccuracy.toFixed(1)}%`}
+              color="#3b82f6"
+            />
+            <StatCard
+              title="Current Streak"
+              value={earTrainingStats.currentStreak}
+              color="#f59e0b"
+            />
+            <StatCard
+              title="Best Streak"
+              value={earTrainingStats.bestStreak}
+              color="#8b5cf6"
+            />
+          </div>
+
+          {/* Performance by Type */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            marginBottom: '24px'
+          }}>
+            <h4 style={{ 
+              margin: '0 0 16px 0', 
+              color: '#ffffff',
+              fontSize: '16px',
+              fontWeight: '600'
+            }}>
+              Performance by Exercise Type
+            </h4>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px'
+            }}>
+              <StatCard
+                title="Single Notes"
+                value={`${earTrainingStats.sessionsByType['single-note'].accuracy.toFixed(1)}%`}
+                subtitle={`${earTrainingStats.sessionsByType['single-note'].correct}/${earTrainingStats.sessionsByType['single-note'].total}`}
+                color="#22c55e"
+                gradient={false}
+              />
+              <StatCard
+                title="Intervals"
+                value={`${earTrainingStats.sessionsByType['interval'].accuracy.toFixed(1)}%`}
+                subtitle={`${earTrainingStats.sessionsByType['interval'].correct}/${earTrainingStats.sessionsByType['interval'].total}`}
+                color="#3b82f6"
+                gradient={false}
+              />
+              <StatCard
+                title="Chords"
+                value={`${earTrainingStats.sessionsByType['chord'].accuracy.toFixed(1)}%`}
+                subtitle={`${earTrainingStats.sessionsByType['chord'].correct}/${earTrainingStats.sessionsByType['chord'].total}`}
+                color="#8b5cf6"
+                gradient={false}
+              />
+            </div>
+          </div>
+
+          {/* Performance by Difficulty */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            marginBottom: '24px'
+          }}>
+            <h4 style={{ 
+              margin: '0 0 16px 0', 
+              color: '#ffffff',
+              fontSize: '16px',
+              fontWeight: '600'
+            }}>
+              Performance by Difficulty
+            </h4>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px'
+            }}>
+              <StatCard
+                title="Easy"
+                value={`${earTrainingStats.sessionsByDifficulty['easy'].accuracy.toFixed(1)}%`}
+                subtitle={`${earTrainingStats.sessionsByDifficulty['easy'].correct}/${earTrainingStats.sessionsByDifficulty['easy'].total}`}
+                color="#22c55e"
+                gradient={false}
+              />
+              <StatCard
+                title="Medium"
+                value={`${earTrainingStats.sessionsByDifficulty['medium'].accuracy.toFixed(1)}%`}
+                subtitle={`${earTrainingStats.sessionsByDifficulty['medium'].correct}/${earTrainingStats.sessionsByDifficulty['medium'].total}`}
+                color="#f59e0b"
+                gradient={false}
+              />
+              <StatCard
+                title="Hard"
+                value={`${earTrainingStats.sessionsByDifficulty['hard'].accuracy.toFixed(1)}%`}
+                subtitle={`${earTrainingStats.sessionsByDifficulty['hard'].correct}/${earTrainingStats.sessionsByDifficulty['hard'].total}`}
+                color="#ef4444"
+                gradient={false}
+              />
+            </div>
+          </div>
+
+          {/* Recent Sessions */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            marginBottom: '24px'
+          }}>
+            <h4 style={{ 
+              margin: '0 0 16px 0', 
+              color: '#ffffff',
+              fontSize: '16px',
+              fontWeight: '600'
+            }}>
+              Recent Exercises
+            </h4>
+            {earTrainingStats.recentSessions.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '20px',
+                color: '#6c757d'
+              }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>🎵</div>
+                <div>No ear training exercises yet</div>
+              </div>
+            ) : (
+              <div style={{ maxHeight: '300px', overflow: 'auto' }}>
+                {earTrainingStats.recentSessions.map(session => (
+                  <div key={session.id} style={{
+                    padding: '12px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: '500', color: '#ffffff' }}>
+                        {session.exerciseType.replace('-', ' ').toUpperCase()} - {session.difficulty.toUpperCase()}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                        {EarTrainingStatsManager.formatDate(session.date)}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      background: session.correct ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                      color: session.correct ? '#22c55e' : '#ef4444'
+                    }}>
+                      {session.correct ? '✅ Correct' : '❌ Incorrect'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Clear Ear Training Data Button */}
+          <div style={{
+            textAlign: 'center',
+            marginBottom: '24px'
+          }}>
+            <button
+              onClick={() => {
+                if (confirm('Are you sure you want to clear all ear training data? This cannot be undone.')) {
+                  EarTrainingStatsManager.resetStats();
+                  setEarTrainingStats(EarTrainingStatsManager.getStats());
+                }
+              }}
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                color: '#fca5a5',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              Clear Ear Training Data
+            </button>
+          </div>
         </div>
       )}
 
