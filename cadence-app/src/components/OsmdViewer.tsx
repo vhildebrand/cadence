@@ -216,8 +216,8 @@ const OsmdViewer = forwardRef<OsmdViewerRef, OsmdViewerProps>(
         drawTitle: true,
         cursorsOptions: [{
           type: 0, // Standard cursor
-          color: '#ff0000', // Red cursor
-          alpha: 0.8,
+          color: '#74ee74',
+          alpha: 0.4,
           follow: true
         }]
       });
