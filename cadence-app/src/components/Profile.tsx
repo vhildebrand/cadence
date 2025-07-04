@@ -407,15 +407,28 @@ export default function Profile({ performanceTracker, scalePerformanceTracker, l
     };
   }, [performanceTracker]);
 
-  // Get piece trends
+  // Get piece trends - individual sessions
   const pieceTrends = useMemo(() => {
-    if (!selectedPiece) return { accuracies: [], streaks: [] };
-    const trends = performanceTracker.getPieceTrends(selectedPiece, 30);
+    if (!selectedPiece || !selectedPiecePerformance) return { accuracies: [], streaks: [] };
+    
+    // Get recent sessions (last 30 days or last 20 sessions, whichever is smaller)
+    const cutoffDate = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const recentSessions = selectedPiecePerformance.sessions
+      .filter(session => session.timestamp >= cutoffDate)
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-20); // Limit to last 20 sessions for readability
+    
     return {
-      accuracies: trends.dates.map(date => ({ x: date, y: trends.accuracies[trends.dates.indexOf(date)] || 0 })),
-      streaks: trends.dates.map(date => ({ x: date, y: trends.streaks[trends.dates.indexOf(date)] || 0 }))
+      accuracies: recentSessions.map((session, index) => ({
+        x: `Session ${index + 1}`,
+        y: session.accuracy
+      })),
+      streaks: recentSessions.map((session, index) => ({
+        x: `Session ${index + 1}`,
+        y: session.longestStreak
+      }))
     };
-  }, [selectedPiece, performanceTracker]);
+  }, [selectedPiece, selectedPiecePerformance]);
 
   // Handle OpenAI lesson generation
   const handleGenerateLesson = async () => {
